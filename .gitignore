@@ -1,0 +1,22 @@
+node_modules/
+.npm-cache/
+/prototype/evidence/
+/prototype/model-archives/
+/prototype/public/models/htt/*.onnx
+/prototype/public/models/htt/vocab.json
+/prototype/public/models/paddle/*.tar
+/prototype/public/paddle-ort/
+/docs/Software Dev Bootcamp.pdf
+/public/models/**/*.onnx
+/public/models/**/*.tar
+/public/paddle-ort/*.wasm
+/public/paddle-ort/*.mjs
+/local-assets/
+/PP-OCRv6_tiny_det_onnx_infer.tar
+/PP-OCRv6_tiny_rec_onnx_infer.tar
+dist/
+coverage/
+playwright-report/
+test-results/
+*.local
+.DS_Store
