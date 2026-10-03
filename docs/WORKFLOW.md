@@ -123,9 +123,9 @@ outcome record and code/tests are the durable trail.
   files contain no private ink, unapproved weights, secrets, or unrelated
   work. Run `npm test` and `npm run build` for code changes, plus relevant
   `npm run test:e2e` flows for cross-module/UI behavior. E2E requires a
-  production build and installed Chrome under the current Playwright
-  configuration. Record any skipped non-typecheck check and why; never
-  commit while the TypeScript gate fails.
+  production build and Playwright's Chromium browser installed with
+  `npx playwright install chromium`. Record any skipped non-typecheck
+  check and why; never commit while the TypeScript gate fails.
 - **Commit atomically:** Use
   `<type>(<scope>): <imperative lowercase summary>` with a header under
   50 characters and no trailing period. Allowed types are `feat`, `fix`,

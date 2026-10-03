@@ -91,7 +91,7 @@ async function builtWorkerPath() {
 }
 
 async function replay(preview, workerPath, strokes) {
-  const browser = await chromium.launch({ channel: "chrome", headless: true });
+  const browser = await chromium.launch({ headless: true });
   try {
     const context = await browser.newContext({ serviceWorkers: "block" });
     await context.route("**/*", (route) => {
