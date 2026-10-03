@@ -57,7 +57,8 @@ export class NotebookApp {
   private deletingId: string | null = null;
   private recoveryError: StoredDataError | null = null;
   private busy = false;
-  private lastAnnouncement = "";
+  private saveFailed = false;
+  private announcedResults = new Map<string, string>();
   private editRevision = 0;
   private rendererWarning: string | null = null;
 
@@ -169,6 +170,7 @@ export class NotebookApp {
     this.saveQueue = null;
     this.renderer.setInk([]);
     this.renderer.setAnswers([]);
+    this.shell.liveRegion.textContent = "";
     this.equations.setPage(page, {});
     this.shell.pageTitle.textContent = page.title;
     this.updateSaveStatus("not-saved");
@@ -208,6 +210,7 @@ export class NotebookApp {
       this.selectedLineId = null;
       this.correctionGuard = null;
       this.correctionSelection = "";
+      this.shell.liveRegion.textContent = "";
       this.equations.setPage(session.document.page, session.corrections);
       this.shell.workspace.scrollTo({ top: 0, left: 0 });
       this.updateControls();
@@ -227,26 +230,47 @@ export class NotebookApp {
     return latest;
   }
 
+  private announceStatus(message: string): void {
+    if (this.shell.systemAnnouncement.textContent !== message) {
+      this.shell.systemAnnouncement.textContent = message;
+    }
+  }
+
   private updateSaveStatus(status: SaveStatus): void {
     const labels = {
       saved: "Saved on this device",
       saving: "Saving to this device",
       "not-saved": "Not saved",
     };
+    const previous = this.shell.saveStatus.textContent;
     this.shell.saveStatus.textContent = labels[status];
     this.shell.saveStatus.dataset.tone = status === "not-saved" ? "error"
       : status === "saving" ? "warning" : "ok";
     this.shell.retrySave.hidden = status !== "not-saved" || !this.saveQueue;
+    if (status === "not-saved") {
+      this.saveFailed = true;
+      if (previous !== labels["not-saved"]) this.announceStatus("Changes are not saved.");
+    } else if (status === "saving" && this.saveFailed) {
+      this.announceStatus("Retrying save.");
+    } else if (status === "saved" && this.saveFailed) {
+      this.saveFailed = false;
+      this.announceStatus("Saved on this device.");
+    }
   }
 
   private renderOffline(status: OfflineStatus): void {
-    this.shell.offlineStatus.textContent = status.kind === "ready" && !navigator.onLine
+    const previous = this.shell.offlineStatus.textContent;
+    const message = status.kind === "ready" && !navigator.onLine
       ? "Offline; app assets installed"
       : status.message;
+    this.shell.offlineStatus.textContent = message;
     this.shell.offlineStatus.dataset.tone = status.kind === "ready" ? "ok"
       : status.kind === "failed" || status.kind === "unavailable" ? "error" : "warning";
     this.shell.updateButton.hidden = status.kind !== "update_available";
     this.shell.retryOffline.hidden = status.kind !== "failed";
+    if (message !== previous && (
+      status.kind !== "downloading" || message.startsWith("Retrying")
+    )) this.announceStatus(message);
   }
 
   private updateControls(): void {
@@ -297,6 +321,7 @@ export class NotebookApp {
     const session = this.currentSession();
     if (!session) return;
     this.renderer.setInk(session.document.strokes);
+    this.shell.liveRegion.textContent = "";
     this.equations.inkChanged(session.document.page);
     this.saveCurrent();
     this.updateControls();
@@ -336,10 +361,20 @@ export class NotebookApp {
       reading: "Reading handwriting",
       unavailable: "Recognition unavailable",
     };
+    const previous = this.shell.recognitionStatus.textContent;
     this.shell.recognitionStatus.textContent = labels[status];
     this.shell.recognitionStatus.dataset.tone = status === "unavailable" ? "error"
       : status === "loading" || status === "reading" ? "warning" : "ok";
     this.shell.retryRecognition.hidden = status !== "unavailable";
+    if (status === "unavailable" && previous !== labels.unavailable) {
+      this.announceStatus("Recognition unavailable. Retry recognition or correct a line in Readback.");
+    } else if (status === "ready" && (
+      previous === labels.loading || previous === labels.unavailable
+    )) {
+      this.announceStatus("Recognition ready.");
+    } else if (status === "loading" && previous === labels.unavailable) {
+      this.announceStatus("Retrying recognition.");
+    }
     const projections = this.equations.lines.flatMap<AnswerProjection>((view) => {
       if (view.phase === "unreadable") {
         return [{
@@ -363,6 +398,11 @@ export class NotebookApp {
 
   private renderReadback(): void {
     const views = this.equations.lines;
+    const pagePrefix = `${this.activeId}:`;
+    const currentLines = new Set(views.map((view) => `${pagePrefix}${view.line.lineId}`));
+    for (const key of this.announcedResults.keys()) {
+      if (key.startsWith(pagePrefix) && !currentLines.has(key)) this.announcedResults.delete(key);
+    }
     if (!views.some((view) => view.line.lineId === this.selectedLineId)) {
       this.selectedLineId = views[0]?.line.lineId ?? null;
       this.correctionSelection = "";
@@ -393,6 +433,7 @@ export class NotebookApp {
         this.correctionGuard = this.equations.guardFor(selected.line.lineId);
         this.shell.correctionInput.value = selected.normalizedRead || selected.rawRead;
         this.shell.correctionError.hidden = true;
+        this.shell.correctionInput.removeAttribute("aria-invalid");
       }
     } else if (!this.shell.correctionInput.value && selected.normalizedRead) {
       this.shell.correctionInput.value = selected.normalizedRead;
@@ -413,12 +454,26 @@ export class NotebookApp {
         : selected.message,
       reason,
     ].filter(Boolean).join(" ");
-    if (selected.phase === "complete") {
-      const announcement = `${selected.normalizedRead}: ${resultText(selected.result)}. ${lineStatus(selected)}.`;
-      if (announcement !== this.lastAnnouncement) {
-        this.shell.liveRegion.textContent = announcement;
-        this.lastAnnouncement = announcement;
+    const announcements: string[] = [];
+    views.forEach((view, index) => {
+      const key = `${pagePrefix}${view.line.lineId}`;
+      if (view.phase === "queued" || view.phase === "reading") {
+        this.announcedResults.delete(key);
+        return;
       }
+      const expression = view.normalizedRead || view.rawRead || "unreadable ink";
+      const outcome = view.phase === "complete"
+        ? `${resultText(view.result)}. ${lineStatus(view)}.`
+        : `${view.message || lineStatus(view)}.`;
+      const announcement = `Line ${index + 1}, ${expression}: ${outcome}`;
+      const state = `${view.line.signature}:${expression}:${outcome}`;
+      if (this.announcedResults.get(key) !== state) {
+        this.announcedResults.set(key, state);
+        announcements.push(announcement);
+      }
+    });
+    if (announcements.length > 0) {
+      this.shell.liveRegion.textContent = announcements.join(" ");
     }
   }
 
@@ -576,6 +631,9 @@ export class NotebookApp {
       await this.repository.deletePage(id);
       committed = true;
       this.sessions.delete(id);
+      for (const key of this.announcedResults.keys()) {
+        if (key.startsWith(`${id}:`)) this.announcedResults.delete(key);
+      }
       if (wasActive) {
         this.activeId = null;
         this.saveQueue = null;
@@ -586,6 +644,11 @@ export class NotebookApp {
       this.shell.deleteDialog.close();
       this.deletingId = null;
       await this.refreshPages();
+      if (this.shell.pagesDialog.open) {
+        this.shell.pageList.querySelector<HTMLButtonElement>(
+          '.page-row[data-active="true"] .page-switch',
+        )?.focus();
+      }
     } catch (error) {
       if (committed && wasActive && !this.currentSession()) this.openEphemeralPage();
       this.showError(committed
@@ -741,6 +804,8 @@ export class NotebookApp {
       );
       this.shell.correctionError.hidden = !error;
       this.shell.correctionError.textContent = error ?? "";
+      if (error) this.shell.correctionInput.setAttribute("aria-invalid", "true");
+      else this.shell.correctionInput.removeAttribute("aria-invalid");
       if (error) {
         if (error.startsWith("The ink changed")) {
           this.correctionGuard = this.selectedLineId

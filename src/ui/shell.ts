@@ -101,7 +101,7 @@ export function mountShell(root: HTMLElement) {
             <p id="line-message" class="line-message"></p>
             <form id="correction-form">
               <label for="correction-input">Correct the equation</label>
-              <input id="correction-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" maxlength="512" placeholder="11+11=">
+              <input id="correction-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" maxlength="512" placeholder="11+11=" aria-describedby="correction-error">
               <p id="correction-error" class="field-error" role="alert" hidden></p>
               <button class="button button-strong" type="submit">Use correction</button>
             </form>
@@ -132,6 +132,7 @@ export function mountShell(root: HTMLElement) {
           <button id="confirm-delete" class="button button-danger" type="button">Delete page</button>
         </div>
       </dialog>
+      <div id="system-announcement" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
       <div id="live-region" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
     </div>
   `;
@@ -189,6 +190,7 @@ export function mountShell(root: HTMLElement) {
     deleteMessage: element<HTMLElement>(root, "#delete-message"),
     cancelDelete: element<HTMLButtonElement>(root, "#cancel-delete"),
     confirmDelete: element<HTMLButtonElement>(root, "#confirm-delete"),
+    systemAnnouncement: element<HTMLElement>(root, "#system-announcement"),
     liveRegion: element<HTMLElement>(root, "#live-region"),
   };
 }

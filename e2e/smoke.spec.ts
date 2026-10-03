@@ -21,8 +21,16 @@ test("draw, correct, save, and reload a local equation", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
   await page.getByRole("button", { name: "Readback" }).click();
   await expect(page.locator(".line-choice")).toHaveCount(1);
+  await page.locator("#correction-input").fill("11+a=");
+  await page.getByRole("button", { name: "Use correction" }).click();
+  await expect(page.locator("#correction-error")).toBeVisible();
+  await expect(page.locator("#correction-input")).toHaveAttribute("aria-invalid", "true");
+  await expect(page.locator("#correction-input")).toHaveAttribute("aria-describedby", "correction-error");
+  await expect(page.locator("#correction-input")).toBeFocused();
   await page.locator("#correction-input").fill("11+11=");
   await page.getByRole("button", { name: "Use correction" }).click();
+  await expect(page.locator("#correction-error")).toBeHidden();
+  await expect(page.locator("#correction-input")).not.toHaveAttribute("aria-invalid", "true");
   await expect(page.locator("#line-result")).toContainText("22");
   await expect(page.locator("#line-result")).toContainText("corrected");
   await expect(page.locator("#save-status")).toHaveText("Saved on this device");
@@ -36,6 +44,76 @@ test("draw, correct, save, and reload a local equation", async ({ page }) => {
   await expect(page.locator("#line-result")).toContainText("Undefined");
   await expect(page.locator("#line-message")).toContainText("Division by zero");
   expect(errors).toEqual([]);
+});
+
+test("settled lines announce once even when another line is selected", async ({ page }) => {
+  await page.addInitScript(() => {
+    class TestWorker {
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onerror = null;
+      onmessageerror = null;
+
+      postMessage(request: {
+        type: string;
+        requestId: number;
+        pageId?: string;
+        lineId?: string;
+        canvasRevisionId?: number;
+      }) {
+        if (request.type === "cancel") return;
+        const data = request.type === "init"
+          ? { type: "ready", requestId: request.requestId, modelId: "test", elapsedMs: 0 }
+          : {
+              type: "result",
+              ...request,
+              rawText: "1+1=",
+              boxes: [],
+              detMs: 0,
+              recMs: 0,
+              elapsedMs: 0,
+              raster: { width: 32, height: 32, version: "test" },
+            };
+        setTimeout(() => this.onmessage?.({ data } as MessageEvent), 0);
+      }
+
+      terminate() {}
+    }
+    Object.defineProperty(window, "Worker", { value: TestWorker });
+  });
+  await page.goto("/");
+  await expect(page.locator("#recognition-status")).toHaveText("Recognition ready");
+  await expect(page.locator("#offline-status")).toContainText("Ready offline");
+  await expect(page.locator("#system-announcement")).toHaveAttribute("role", "status");
+  await expect(page.locator("#system-announcement")).toHaveAttribute("aria-live", "polite");
+  await expect(page.locator("#system-announcement")).toHaveText("Ready offline on this device.");
+  await page.evaluate(() => {
+    const region = document.querySelector<HTMLElement>("#system-announcement")!;
+    region.dataset.changes = "0";
+    new MutationObserver(() => {
+      region.dataset.changes = String(Number(region.dataset.changes) + 1);
+    }).observe(region, { childList: true, characterData: true, subtree: true });
+  });
+
+  await drawStroke(page, 120, 140);
+  await expect(page.locator("#live-region")).toHaveText("Line 1, 1+1=: 2. Review read.");
+  await drawStroke(page, 120, 360);
+  await expect(page.locator("#live-region")).toBeEmpty();
+  await expect(page.locator(".line-choice")).toHaveCount(2);
+  await expect(page.locator(".line-choice").first()).toHaveAttribute("aria-current", "true");
+  await expect(page.locator("#live-region")).toHaveText("Line 2, 1+1=: 2. Review read.");
+  await expect(page.locator("#system-announcement")).toHaveAttribute("data-changes", "0");
+
+  await page.evaluate(() => {
+    const region = document.querySelector<HTMLElement>("#live-region")!;
+    region.dataset.changes = "0";
+    new MutationObserver(() => {
+      region.dataset.changes = String(Number(region.dataset.changes) + 1);
+    }).observe(region, { childList: true, characterData: true, subtree: true });
+  });
+  await page.getByRole("button", { name: "Readback" }).click();
+  await page.locator(".line-choice").first().click();
+  await page.locator(".line-choice").nth(1).click();
+  await expect(page.locator("#live-region")).toHaveAttribute("data-changes", "0");
 });
 
 test("pages keep independent ink and support rename and delete", async ({ page }) => {
@@ -70,6 +148,7 @@ test("pages keep independent ink and support rename and delete", async ({ page }
   await secondRow.getByRole("button", { name: "Delete" }).click();
   await page.getByRole("button", { name: "Delete page" }).click();
   await expect(page.locator(".page-row")).toHaveCount(1);
+  await expect(page.locator('.page-row[data-active="true"] .page-switch')).toBeFocused();
 });
 
 test("complete install reloads the notebook offline", async ({ page, context }) => {
@@ -111,10 +190,15 @@ test("temporary storage failure can recover the unsaved page", async ({ page }) 
 });
 
 test("narrow mobile layout keeps controls and panels in view", async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 568 });
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
+  await expect(page.locator("#page-title")).toBeVisible();
+  expect(await page.evaluate(() => document.body.scrollWidth)).toBeLessThanOrEqual(390);
+
+  await page.setViewportSize({ width: 320, height: 568 });
   await expect(page.locator("#pages-button")).toBeEnabled();
   expect(await page.evaluate(() => document.body.scrollWidth)).toBeLessThanOrEqual(320);
+  expect((await page.locator("#pen-width").boundingBox())?.height).toBeGreaterThanOrEqual(44);
 
   await page.locator("#pages-button").click();
   await expect(page.locator("#pages-dialog")).toBeVisible();

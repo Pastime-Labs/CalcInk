@@ -133,7 +133,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .status-pill[data-tone="warning"] { color: #794713; background: #f8ead0; }
 .status-pill[data-tone="error"] { color: #8c3429; background: #f5ded9; }
 .status-action {
-  min-height: 26px;
+  min-height: 44px;
   border: 0;
   background: transparent;
   color: var(--accent);
@@ -195,7 +195,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .tool-width { border-top: 1px solid var(--line); padding-top: 15px; }
 .tool-width label { font-size: 11px; font-weight: 700; }
 .tool-width output { float: right; }
-.tool-width input { width: 100%; accent-color: var(--accent); }
+.tool-width input { width: 100%; min-height: 44px; accent-color: var(--accent); }
 .tool-history { border-top: 1px solid var(--line); padding-top: 13px; }
 .tool-note { margin: auto 0 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
 
@@ -360,14 +360,16 @@ dialog::backdrop { background: #132a23a8; }
   .identity-mark { width: 35px; height: 35px; font-size: 21px; }
   .identity .eyebrow { display: none; }
   .wordmark { font-size: 22px; }
-  .page-heading { display: none; }
+  .page-heading { grid-column: 1 / -1; grid-row: 2; }
+  .page-heading .page-kicker { display: none; }
+  .page-heading h1 { margin: 0; font-size: 20px; }
   .header-actions { gap: 5px; }
   .header-actions .button { padding: 0 10px; font-size: 12px; }
   .status-bar { padding: 6px 10px; gap: 4px; }
-  .status-pill { font-size: 10px; }
+  .status-pill { font-size: 12px; }
   .notebook { display: flex; flex-direction: column; position: relative; }
   .workspace-frame { order: 1; flex: 1; }
-  .workspace-caption { padding: 7px 12px; font-size: 9px; }
+  .workspace-caption { padding: 7px 12px; font-size: 11px; }
   .paper { margin: 0 12px 30px; }
   .tools {
     order: 3;
@@ -393,11 +395,11 @@ dialog::backdrop { background: #132a23a8; }
     min-height: 54px;
     padding: 3px;
     text-align: center;
-    font-size: 9px;
+    font-size: 11px;
   }
   .tool-glyph { width: auto; font-size: 19px; }
   .tool-width { grid-column: 2; grid-row: 1; flex-direction: column; width: 80px; padding: 0 5px; border: 0; }
-  .tool-width label { width: 100%; font-size: 9px; }
+  .tool-width label { width: 100%; font-size: 11px; }
   .tool-history {
     grid-column: 1 / -1;
     grid-row: 2;
