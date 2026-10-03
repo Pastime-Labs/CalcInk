@@ -8,6 +8,8 @@ Fake Worker or parser-only tests cannot supply a handwriting score. See the
 [recognition evidence deep dive](design/08-recognition-evidence.md).
 Prototype comparison exports are development observations, not attempts
 in the fresh acceptance set.
+The local scoring helper is ready, but no fresh owner attempts have been
+recorded or scored.
 
 ## Exploratory V1 Replay, 4 October
 
@@ -131,3 +133,39 @@ Keep the score numerator, denominator, raw first reads, device identity,
 latency distribution, failed examples, and limitations in the release
 evidence. A visible Readback correction is a safety feature and never
 raises the automatic-recognition score.
+
+## 5. Private scoring worksheet
+
+After freezing the build, generate the 60-row manifest once:
+
+```powershell
+node scripts/score-benchmark.mjs --template local-assets/benchmark/attempts.json
+```
+
+`local-assets/` is Git-ignored. Fill `frozenCommit`, named `device`,
+`browser`, `inputMethod`, and `penWidth`; note any per-attempt variation in
+`notes`. For each fresh attempt, export its first read from the app's
+**Readback > Export sample** control before correction, ink edit, page
+switch, or reload. Put that JSON next to `attempts.json` and set the row's
+`sampleFile` to its filename. An export contains private stroke geometry
+and browser details; do not commit or share it without consent.
+
+If no first read/export exists, leave `sampleFile` empty and enter a
+specific `failure` instead. Never omit the row. Record `settledMs` from
+final pen-up until the visible answer settles with the model already warm;
+use `null` if no answer appears. Record clipping, split lines, input method
+changes, and corrections in `notes`, not as automatic successes. The
+export's Worker `elapsedMs` is **not** pen-up-to-answer latency.
+
+```powershell
+node scripts/score-benchmark.mjs local-assets/benchmark/attempts.json
+```
+
+The helper checks 60 unique row/session attempts, exact first read **and**
+result, the four known-failure rows, each two-row category, model identity
+consistency, duplicate stroke geometry, the zero-division safety rule, and
+nearest-rank warm p95. It reports missing attempts and timings rather than
+removing them from the denominator. `thresholdsMet`
+means only the **recorded numeric gates** pass; the owner must still verify
+fresh ink, device/timing provenance, active-inference frame traces, memory,
+offline behavior, and distribution rights before any release claim.

@@ -10,7 +10,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "replay:fixture": "node scripts/replay-fixture.mjs",
-    "test": "vitest run src && node --test scripts/replay-fixture.test.mjs",
+    "test": "vitest run src && node --test scripts/replay-fixture.test.mjs scripts/score-benchmark.test.mjs",
     "test:e2e": "npm run build && playwright test"
   },
   "dependencies": {

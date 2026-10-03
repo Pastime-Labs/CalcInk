@@ -235,6 +235,39 @@ describe("EquationController", () => {
     controller.destroy();
   });
 
+  it("shows model initialization failure and preserves correction after retry", async () => {
+    vi.useFakeTimers();
+    const first = new FakeWorker();
+    const second = new FakeWorker();
+    let calls = 0;
+    const controller = new EquationController(
+      () => {},
+      () => {},
+      () => (calls++ === 0 ? first : second) as unknown as Worker,
+    );
+    controller.setPage(page("A", [stroke("upper", 10), stroke("lower", 10, 80)]), {});
+    first.emit({ type: "init_error", requestId: 1, code: "model_load_failed", elapsedMs: 4 });
+    expect(controller.status).toBe("unavailable");
+    expect(controller.lines).toHaveLength(2);
+    expect(controller.lines.every((line) =>
+      line.phase === "unreadable" && line.message.includes("Recognition is unavailable"))).toBe(true);
+
+    const guard = controller.guardFor(controller.lines[0]!.line.lineId)!;
+    expect(controller.applyCorrection(guard, "11+11=")).toBeNull();
+    controller.retry();
+    expect(controller.lines[0]?.result).toMatchObject({ kind: "value", display: "22" });
+    expect(controller.lines[0]?.source).toBe("corrected");
+    const init = second.sent[0];
+    if (!init || init.type !== "init") throw new Error("Retry did not initialize the model");
+    second.emit({ type: "ready", requestId: init.requestId, modelId: "test", elapsedMs: 1 });
+    await vi.runOnlyPendingTimersAsync();
+    expect(controller.status).toBe("reading");
+    expect(second.sent.some((request) =>
+      request.type === "recognize" && request.lineId === controller.lines[1]?.line.lineId)).toBe(true);
+    expect(controller.lines[0]?.source).toBe("corrected");
+    controller.destroy();
+  });
+
   it("reads the edited lower line before an older queued upper line", async () => {
     vi.useFakeTimers();
     const worker = new FakeWorker();

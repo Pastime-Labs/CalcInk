@@ -1,8 +1,9 @@
 # 08. Recognition Evidence
 
-Status: Opt-in first-read export and real-Worker fixture replay are
-implemented locally. The fresh handwriting benchmark is **not executed**
-and PP-OCRv6 tiny is **not an accepted release result**.
+Status: Opt-in first-read export, real-Worker fixture replay, and a private
+benchmark score helper are implemented locally. The fresh handwriting
+benchmark is **not executed** and PP-OCRv6 tiny is **not an accepted release
+result**.
 The prototype has known first-read failures, including `9=`, `11+11=`,
 `6+3=`, and `9+3=`. A user correction is a safety fallback, not a
 recognition success.
