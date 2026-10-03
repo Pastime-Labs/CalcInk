@@ -66,10 +66,12 @@ failed earlier gate into a pass.
   reproducible prototype snapshot, third-party notice bundle, and
   owner redistribution decision have not been evidenced here.
 - **Phase 1:** Root Vite/strict-TypeScript app, CI checks, and hash-verified
-  asset preparation are implemented. The existing-asset path builds; a
-  clean checkout downloading archives from the official host has **not**
-  been verified here because the host timed out. No GitHub CI/PR run exists
-  yet, so the clean-checkout gate remains open.
+  asset preparation are implemented. A fresh local clone of committed
+  `4f1833c` installed and built after downloading both archives from the
+  official host; unit and desktop browser suites passed. This does not
+  cover the final candidate or a public checkout. No hosted GitHub CI/PR
+  run exists yet, so the public reproducibility gate remains open; see the
+  [release evidence snapshot](design/18-release-and-bug-bash.md#evidence-snapshot-4-october-2026).
 - **Phase 2:** Pointer ink, both erasers, history, DPR-backed rendering,
   pages, IndexedDB migration/recovery, and the numeric parser pass unit and
   desktop browser flows. Physical touch still requires Phase-5 testing.
@@ -89,6 +91,14 @@ failed earlier gate into a pass.
   writes and blocked upgrade. Real-handwriting accuracy, real-browser
   quota/multi-tab faults, physical-phone airplane mode, and the owner
   redistribution decision remain open.
+- **Phase 5-6 preparation:** The local `feat/acceptance-release` branch
+  has a first-read scorer for private evidence, additional model-failure
+  and accessibility checks, more legible mobile controls, and a
+  pinned-Chromium browser gate in CI.
+  On Windows, `npx tsc --noEmit`, `npm test` (190 app and 15 Node tests),
+  and `npm run test:e2e` (12 browser tests) passed. These are not a fresh
+  handwriting score, a physical-device frame trace, visual approval,
+  a hosted CI result, or release clearance.
 
 The links below give each elementary deep dive its **primary build phase**,
 not permission to defer its cross-phase tests. For example, the Phase-2

@@ -58,6 +58,37 @@ build is preferable to a polished
 recording that cannot be run, but public hosting still requires model
 redistribution clearance.
 
+## Evidence snapshot, 4 October 2026
+
+This is a local release-readiness snapshot, **not** Phase 5 or 6 sign-off.
+Created with `git clone --no-local . <temporary-directory>` from committed
+`4f1833c0977353824fd4284a3a6188f5a03edc09`, without copied assets
+or `node_modules`, on Windows with Node `v24.19.0`, npm `11.17.0`,
+Playwright `1.63.0`, and installed Chrome `154.0.8037.93`:
+
+| Gate | Observed result | Remaining work |
+| --- | --- | --- |
+| Clean-clone automated checks | `npm ci`, `npm run build` (including `tsc --noEmit`), `npm test` (189 app and 6 replay tests), and `npm run test:e2e` (11 browser tests) passed. Both model archives downloaded from the official host and passed pinned SHA-256 verification. These tests used the then-committed Playwright `channel: "chrome"` config. | Repeat on the final candidate and in hosted CI with the pinned Playwright Chromium configuration; test a public checkout. |
+| Generated assets and offline | The build emitted a service worker with 24 precache entries; the browser suite exercised local production preview, including offline real-Worker inference. | Inventory final published assets and network requests; repeat full offline flow on a named physical phone and hosted HTTPS origin. |
+| Recognition, devices, and accessibility | Automated behavior checks passed on desktop Chrome. | Fresh 60-attempt owner benchmark, warm answer p95, drawing frames during active OCR, memory, touch/stylus, keyboard, and screen-reader evidence remain open. |
+| Distribution and submission | Model binaries and private ink are absent from tracked Git files. No Git remote, hosted URL, or public PR/CI result exists. | Complete rights/notice decision below, then publish and smoke-test the exact public commit and demo. |
+
+**Rights evidence, not clearance:** PaddlePaddle's official
+[detector](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det_onnx)
+and [recognizer](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec_onnx)
+cards label the ONNX artifacts Apache-2.0; the pinned archive URLs and
+hashes are in `scripts/prepare-assets.mjs`. The official
+[PaddleOCR repository license](https://github.com/PaddlePaddle/PaddleOCR/blob/main/LICENSE)
+and [SDK package manifest](https://github.com/PaddlePaddle/PaddleOCR/blob/main/paddleocr-js/packages/core/package.json)
+identify Apache-2.0. The versioned [ONNX Runtime license](https://github.com/microsoft/onnxruntime/blob/v1.26.0/LICENSE)
+is MIT, with [third-party notices](https://github.com/microsoft/onnxruntime/blob/v1.26.0/ThirdPartyNotices.txt).
+The model cards do not enumerate complete training-data terms. The npm
+SDK/runtime packages inspected locally did not include LICENSE or NOTICE
+files, so links alone are not the required notice bundle. Inventory all
+shipped code, fonts, model assets, and runtime notices; include applicable
+texts in the released source/build and record the owner's final
+redistribution decision before public hosting.
+
 ## Development defect workflow
 
 Fix bugs found during development when discovered. Keep one outcome issue

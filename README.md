@@ -33,7 +33,9 @@ npm run preview
 ```
 
 `npm test` runs unit tests; `npm run test:e2e` builds and runs browser
-journeys. Stop any running Vite/preview process before `npm ci` on Windows:
+journeys. Install Playwright's Chromium once with
+`npx playwright install chromium` before browser tests or fixture replay.
+Stop any running Vite/preview process before `npm ci` on Windows:
 the native Rolldown binary may otherwise be locked (`EPERM`).
 
 `prepare:assets` verifies SHA-256 hashes for the two official PP-OCRv6 tiny
@@ -45,6 +47,27 @@ pending third-party notices and the owner redistribution decision; see the
 `npm run build` repeats asset verification before bundling. A network
 connection is required for `npm ci` and for a clean checkout without local
 model archives.
+
+## Model and Distribution
+
+V1 uses PaddlePaddle's [PP-OCRv6 tiny detector](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det_onnx)
+and [recognizer](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec_onnx).
+Their model cards label the artifacts Apache-2.0. The detector uses an
+LCNetV4 backbone and RepLKFPN neck; the recognizer uses LCNetV4, direct
+reshape, and a CTC+NRTR decoder. CalcInk rasterizes ink in an application
+Worker, then the PaddleOCR.js SDK runs detection and recognition in its
+own Worker using ONNX Runtime Web. See the
+[prototype model comparison](prototype/docs/PADDLEOCR-TRIAL.md) and
+[V1 raster contract](docs/design/09-ml-preprocessing.md) for the evidence
+and input path.
+
+The [PaddleOCR.js source](https://github.com/PaddlePaddle/PaddleOCR/tree/main/paddleocr-js)
+identifies the SDK as Apache-2.0; [ONNX Runtime Web](https://github.com/microsoft/onnxruntime/blob/v1.26.0/LICENSE)
+is MIT and has [upstream third-party notices](https://github.com/microsoft/onnxruntime/blob/v1.26.0/ThirdPartyNotices.txt).
+These labels and links do not complete the release review: an exact
+third-party notice bundle, any relevant training-data terms, and the
+owner's redistribution decision remain open. Do not publicly host the
+model-containing build until that review is recorded.
 
 ## Recognition Diagnostics
 
@@ -74,8 +97,11 @@ recovery, an offline reload, and **fresh real Worker inference after the
 network is disabled**. The synthetic OCR fixture verifies execution, not
 handwriting accuracy. A synthetic-ink offline equation/edit/correction/page
 journey also passes. Real-browser storage faults, the frozen owner-handwriting
-benchmark, physical-phone 60 FPS and latency checks, clean-checkout
-download/CI path, and the owner redistribution decision are **not yet passed**.
+benchmark, physical-phone 60 FPS and latency checks, final public-checkout
+and hosted-CI paths, and the owner redistribution decision are **not yet passed**.
+An isolated clone of committed `4f1833c` installed and built after
+downloading both official model archives, then passed unit and desktop
+browser tests; see the [release evidence snapshot](docs/design/18-release-and-bug-bash.md#evidence-snapshot-4-october-2026).
 Do not treat this working build as a public-release acceptance result.
 Clearing browser site data also removes local pages and offline assets.
 
