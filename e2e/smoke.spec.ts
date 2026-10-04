@@ -39,6 +39,8 @@ test("draw, correct, save, and reload a local equation", async ({ page }) => {
   await expect(page.locator("#page-title")).toHaveText("Untitled page");
   await page.getByRole("button", { name: "Readback" }).click();
   await expect(page.locator("#line-result")).toContainText("22");
+  await expect(page.locator("#raw-read")).toHaveText("No OCR read retained");
+  await expect(page.locator("#normalized-read")).toHaveText("11+11=");
   await page.locator("#correction-input").fill("4/0=");
   await page.getByRole("button", { name: "Use correction" }).click();
   await expect(page.locator("#line-result")).toContainText("Undefined");
@@ -67,6 +69,7 @@ test("settled lines announce once even when another line is selected", async ({ 
               type: "result",
               ...request,
               rawText: "1+1=",
+              unmaskedRawText: "I+I=",
               boxes: [],
               detMs: 0,
               recMs: 0,
@@ -95,12 +98,16 @@ test("settled lines announce once even when another line is selected", async ({ 
   });
 
   await drawStroke(page, 120, 140);
-  await expect(page.locator("#live-region")).toHaveText("Line 1, 1+1=: 2. Review read.");
+  await expect(page.locator("#live-region")).toHaveText(
+    "Line 1, 1+1=: 2. Review read. Restricted OCR changed the model read. Verify this answer.",
+  );
   await drawStroke(page, 120, 360);
   await expect(page.locator("#live-region")).toBeEmpty();
   await expect(page.locator(".line-choice")).toHaveCount(2);
   await expect(page.locator(".line-choice").first()).toHaveAttribute("aria-current", "true");
-  await expect(page.locator("#live-region")).toHaveText("Line 2, 1+1=: 2. Review read.");
+  await expect(page.locator("#live-region")).toHaveText(
+    "Line 2, 1+1=: 2. Review read. Restricted OCR changed the model read. Verify this answer.",
+  );
   await expect(page.locator("#system-announcement")).toHaveAttribute("data-changes", "0");
 
   await page.evaluate(() => {
@@ -111,6 +118,8 @@ test("settled lines announce once even when another line is selected", async ({ 
     }).observe(region, { childList: true, characterData: true, subtree: true });
   });
   await page.getByRole("button", { name: "Readback" }).click();
+  await expect(page.locator("#unmasked-read")).toHaveText("Unrestricted OCR read: I+I=");
+  await expect(page.locator("#line-message")).toContainText("Verify this answer");
   await page.locator(".line-choice").first().click();
   await page.locator(".line-choice").nth(1).click();
   await expect(page.locator("#live-region")).toHaveAttribute("data-changes", "0");

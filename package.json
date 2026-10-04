@@ -4,13 +4,15 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "postinstall": "node scripts/patch-paddle-decoder.mjs",
     "prepare:assets": "node scripts/prepare-assets.mjs",
+    "predev": "node scripts/patch-paddle-decoder.mjs --check",
     "dev": "vite",
-    "prebuild": "npm run prepare:assets",
+    "prebuild": "npm run prepare:assets && node scripts/patch-paddle-decoder.mjs --check",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "replay:fixture": "node scripts/replay-fixture.mjs",
-    "test": "vitest run src && node --test scripts/replay-fixture.test.mjs scripts/score-benchmark.test.mjs",
+    "test": "vitest run src && node --test scripts/patch-paddle-decoder.test.mjs scripts/replay-fixture.test.mjs scripts/score-benchmark.test.mjs",
     "test:e2e": "npm run build && playwright test"
   },
   "dependencies": {

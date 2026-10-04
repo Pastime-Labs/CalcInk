@@ -32,6 +32,7 @@ function filled() {
       },
       model: {
         id: "PP-OCRv6_tiny_det+rec",
+        decoder: "ctc-mask-v1",
         detector: {
           id: "PP-OCRv6_tiny_det",
           archiveSha256: "ff6ab415b0a6e0c488550f2fb5d5046f1719848df220b2dc21b56402a65bc05d",
@@ -81,6 +82,22 @@ test("an alphabetic read cannot be rescued by the correct result", () => {
   assert.equal(report.knownFailureHits, 11);
   assert.deepEqual(report.misses, ["S1-11"]);
   assert.equal(report.thresholdsMet, false);
+});
+
+test("an omitted masked box cannot count as an exact read", () => {
+  const { samples, score } = filled();
+  const sample = samples.get("S1-11.json");
+  sample.firstRead.boxes = [
+    { text: "", unmaskedText: "g" },
+    { text: "9=", unmaskedText: "9=" },
+  ];
+  const report = score();
+  assert.equal(report.hits, 59);
+  assert.deepEqual(report.misses, ["S1-11"]);
+  assert.equal(report.thresholdsMet, false);
+  sample.firstRead.boxes[0].text = " ";
+  sample.firstRead.rawText = " 9=";
+  assert.deepEqual(score().misses, ["S1-11"]);
 });
 
 test("a category can fail while the overall count passes", () => {
@@ -149,6 +166,9 @@ test("rejects a different model and a timing for an unreadable answer", () => {
   sample.model.id = "different-model";
   assert.throws(score, /frozen V1 pins/);
   sample.model.id = "PP-OCRv6_tiny_det+rec";
+  sample.model.decoder = null;
+  assert.throws(score, /frozen V1 pins/);
+  sample.model.decoder = "ctc-mask-v1";
   sample.firstRead.result = null;
   assert.throws(score, /no answer was shown/);
 });

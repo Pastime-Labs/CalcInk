@@ -351,11 +351,14 @@ test("opt-in sample export preserves the first automatic read after correction",
   expect(first).toMatchObject({
     schemaVersion: 1,
     intendedExpression: "11+11=",
-    model: { id: "PP-OCRv6_tiny_det+rec" },
+    model: { id: "PP-OCRv6_tiny_det+rec", decoder: "ctc-mask-v1" },
   });
   expect(first.strokes).toBeInstanceOf(Array);
   expect((first.strokes as unknown[]).length).toBeGreaterThan(0);
-  expect(first.firstRead).toMatchObject({ rawText: expect.any(String) });
+  expect(first.firstRead).toMatchObject({
+    rawText: expect.any(String),
+    unmaskedRawText: expect.any(String),
+  });
 
   await page.locator("#correction-input").fill("2+3=");
   await page.getByRole("button", { name: "Use correction" }).click();

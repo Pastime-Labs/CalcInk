@@ -438,7 +438,11 @@ export class NotebookApp {
     } else if (!this.shell.correctionInput.value && selected.normalizedRead) {
       this.shell.correctionInput.value = selected.normalizedRead;
     }
-    this.shell.rawRead.textContent = selected.rawRead || "Not read yet";
+    this.shell.rawRead.textContent = selected.rawRead ||
+      (selected.source === "corrected" ? "No OCR read retained" : "Not read yet");
+    this.shell.unmaskedRead.hidden =
+      !selected.unmaskedRawRead || selected.unmaskedRawRead === selected.rawRead;
+    this.shell.unmaskedRead.textContent = `Unrestricted OCR read: ${selected.unmaskedRawRead}`;
     this.shell.normalizedRead.textContent = selected.normalizedRead || "Not available";
     this.shell.lineResult.textContent = selected.result
       ? `${resultText(selected.result)} ${selected.source === "corrected" ? "(corrected)" : "(review read)"}`
@@ -451,7 +455,8 @@ export class NotebookApp {
     this.shell.lineMessage.textContent = [
       this.conflicts.has(selected.line.lineId)
         ? "The answer would overlap ink. It is shown here instead."
-        : selected.message,
+        : "",
+      selected.message,
       reason,
     ].filter(Boolean).join(" ");
     const announcements: string[] = [];
@@ -463,7 +468,7 @@ export class NotebookApp {
       }
       const expression = view.normalizedRead || view.rawRead || "unreadable ink";
       const outcome = view.phase === "complete"
-        ? `${resultText(view.result)}. ${lineStatus(view)}.`
+        ? `${resultText(view.result)}. ${lineStatus(view)}.${view.message ? ` ${view.message}` : ""}`
         : `${view.message || lineStatus(view)}.`;
       const announcement = `Line ${index + 1}, ${expression}: ${outcome}`;
       const state = `${view.line.signature}:${expression}:${outcome}`;

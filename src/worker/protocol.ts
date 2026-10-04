@@ -31,6 +31,7 @@ export type RecognitionResponse =
       type: "ready";
       requestId: number;
       modelId: string;
+      decoderId?: string;
       elapsedMs: number;
     }
   | {
@@ -42,7 +43,13 @@ export type RecognitionResponse =
   | (RecognitionIdentity & {
       type: "result";
       rawText: string;
-      boxes: Array<{ text: string; score: number }>;
+      unmaskedRawText?: string;
+      boxes: Array<{
+        text: string;
+        score: number;
+        unmaskedText?: string;
+        unmaskedScore?: number;
+      }>;
       detMs: number;
       recMs: number;
       elapsedMs: number;

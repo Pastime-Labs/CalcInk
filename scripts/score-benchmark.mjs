@@ -24,6 +24,7 @@ const CATEGORIES = {
 const SESSIONS = ["S1", "S2", "S3"];
 const MODEL = {
   id: "PP-OCRv6_tiny_det+rec",
+  decoder: "ctc-mask-v1",
   detector: {
     id: "PP-OCRv6_tiny_det",
     archiveSha256: "ff6ab415b0a6e0c488550f2fb5d5046f1719848df220b2dc21b56402a65bc05d",
@@ -134,11 +135,14 @@ export function scoreBenchmark(manifest, loadSample) {
         throw new Error(`${key}: no answer was shown; settledMs must be null`);
       }
       const read = compareRead(first.rawText, expression);
-      exact = read.exactRead &&
+      const omittedBox = first.boxes?.some((box) =>
+        !box.text.trim() && !!box.unmaskedText?.trim()) ?? false;
+      exact = !omittedBox && read.exactRead &&
         first.normalizedText === compareRead(expression, expression).normalizedRead &&
         resultMatches(first.result, expected);
       const model = sample.model;
       if (model?.id !== MODEL.id ||
+          model.decoder !== MODEL.decoder ||
           model.detector?.id !== MODEL.detector.id ||
           model.detector?.archiveSha256 !== MODEL.detector.archiveSha256 ||
           model.recognizer?.id !== MODEL.recognizer.id ||

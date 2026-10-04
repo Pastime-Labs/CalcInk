@@ -93,8 +93,9 @@ export function mountShell(root: HTMLElement) {
           <p class="panel-intro">Check what CalcInk read. If a digit is wrong, correct the text here without changing your ink.</p>
           <div id="line-list" class="line-list" aria-label="Equation lines"></div>
           <div id="line-detail" class="line-detail" hidden>
-            <p class="detail-label">Raw model read</p>
+            <p class="detail-label">Restricted OCR read</p>
             <p id="raw-read" class="read-value"></p>
+            <p id="unmasked-read" class="read-value" hidden></p>
             <p class="detail-label">Interpreted equation</p>
             <p id="normalized-read" class="read-value"></p>
             <p id="line-result" class="result-value"></p>
@@ -173,6 +174,7 @@ export function mountShell(root: HTMLElement) {
     lineList: element<HTMLElement>(root, "#line-list"),
     lineDetail: element<HTMLElement>(root, "#line-detail"),
     rawRead: element<HTMLElement>(root, "#raw-read"),
+    unmaskedRead: element<HTMLElement>(root, "#unmasked-read"),
     normalizedRead: element<HTMLElement>(root, "#normalized-read"),
     lineResult: element<HTMLElement>(root, "#line-result"),
     lineMessage: element<HTMLElement>(root, "#line-message"),

@@ -150,7 +150,12 @@ async function replay(preview, workerPath, strokes) {
         if (result.type !== "result") {
           throw new Error(`Recognition Worker failed: ${result.code}`);
         }
-        return { modelId: ready.modelId, modelLoadMs: ready.elapsedMs, result };
+        return {
+          modelId: ready.modelId,
+          decoderId: ready.decoderId,
+          modelLoadMs: ready.elapsedMs,
+          result,
+        };
       } finally {
         worker.terminate();
       }
@@ -168,12 +173,13 @@ async function main() {
   const preview = previewUrl(suppliedUrl ?? process.env.CALCINK_PREVIEW_URL ?? DEFAULT_PREVIEW);
   const sample = validateSample(JSON.parse(await readFile(file, "utf8")));
   const workerPath = await builtWorkerPath();
-  const { modelId, modelLoadMs, result } = await replay(preview, workerPath, sample.strokes);
-  const { rawText, boxes, detMs, recMs, elapsedMs, raster } = result;
+  const { modelId, decoderId, modelLoadMs, result } = await replay(preview, workerPath, sample.strokes);
+  const { rawText, unmaskedRawText, boxes, detMs, recMs, elapsedMs, raster } = result;
   const { normalizedRead, exactRead } = compareRead(rawText, sample.intendedExpression);
   console.log(JSON.stringify({
     intendedExpression: sample.intendedExpression,
     rawText,
+    unmaskedRawText,
     normalizedRead,
     exactRead,
     boxes,
@@ -181,6 +187,7 @@ async function main() {
     recMs,
     elapsedMs,
     modelId,
+    decoderId,
     modelLoadMs,
     raster,
   }, null, 2));

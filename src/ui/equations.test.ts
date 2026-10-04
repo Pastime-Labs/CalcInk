@@ -52,11 +52,17 @@ describe("EquationController", () => {
     expect(controller.hasFirstRead(lineId)).toBe(false);
     expect(controller.diagnosticSampleFor(lineId, "9+9=", environment)).toBeNull();
 
-    worker.emit({ type: "ready", requestId: 1, modelId: "PP-OCRv6_tiny_det+rec", elapsedMs: 1 });
+    worker.emit({
+      type: "ready",
+      requestId: 1,
+      modelId: "PP-OCRv6_tiny_det+rec",
+      decoderId: "ctc-mask-v1",
+      elapsedMs: 1,
+    });
     await vi.runOnlyPendingTimersAsync();
     const first = worker.sent.find((request) => request.type === "recognize");
     if (!first || first.type !== "recognize") throw new Error("First read was not sent");
-    const box = { text: "9+9=", score: 0.8 };
+    const box = { text: "9+9=", score: 0.8, unmaskedText: "g+g=", unmaskedScore: 0.9 };
     worker.emit({
       type: "result",
       requestId: first.requestId,
@@ -64,6 +70,7 @@ describe("EquationController", () => {
       lineId: first.lineId,
       canvasRevisionId: first.canvasRevisionId,
       rawText: "9+9=",
+      unmaskedRawText: "g+g=",
       boxes: [box],
       detMs: 3,
       recMs: 4,
@@ -71,13 +78,21 @@ describe("EquationController", () => {
       raster: { width: 32, height: 24, version: "raster-v1" },
     });
     expect(controller.hasFirstRead(lineId)).toBe(true);
+    expect(controller.lines[0]?.unmaskedRawRead).toBe("g+g=");
+    expect(controller.lines[0]?.message).toContain("Verify this answer");
     ink.points[0]!.x = 999;
     box.text = "changed";
 
     controller.retry();
     const init = worker.sent.at(-1);
     if (!init || init.type !== "init") throw new Error("Retry was not initialized");
-    worker.emit({ type: "ready", requestId: init.requestId, modelId: "PP-OCRv6_tiny_det+rec", elapsedMs: 1 });
+    worker.emit({
+      type: "ready",
+      requestId: init.requestId,
+      modelId: "PP-OCRv6_tiny_det+rec",
+      decoderId: "ctc-mask-v1",
+      elapsedMs: 1,
+    });
     await vi.runOnlyPendingTimersAsync();
     const second = worker.sent.filter((request) => request.type === "recognize").at(-1);
     if (!second || second.type !== "recognize") throw new Error("Second read was not sent");
@@ -103,9 +118,10 @@ describe("EquationController", () => {
       strokes: [{ id: "one", points: [{ x: 10, y: 10 }, { x: 22, y: 24 }] }],
       firstRead: {
         rawText: "9+9=",
+        unmaskedRawText: "g+g=",
         normalizedText: "9+9=",
         result: { kind: "value", display: "18" },
-        boxes: [{ text: "9+9=", score: 0.8 }],
+        boxes: [{ text: "9+9=", score: 0.8, unmaskedText: "g+g=", unmaskedScore: 0.9 }],
         detMs: 3,
         recMs: 4,
         elapsedMs: 10,
@@ -113,6 +129,7 @@ describe("EquationController", () => {
       },
       model: {
         id: "PP-OCRv6_tiny_det+rec",
+        decoder: "ctc-mask-v1",
         detector: {
           id: "PP-OCRv6_tiny_det",
           archiveSha256: "ff6ab415b0a6e0c488550f2fb5d5046f1719848df220b2dc21b56402a65bc05d",
@@ -135,6 +152,106 @@ describe("EquationController", () => {
     expect(controller.hasFirstRead(controller.lines[0]!.line.lineId)).toBe(false);
     controller.setPage(page("B", [stroke("one", 10)]), {});
     expect(controller.hasFirstRead(controller.lines[0]!.line.lineId)).toBe(false);
+    controller.destroy();
+  });
+
+  it("does not turn a retry after an OCR error into first-read evidence", async () => {
+    vi.useFakeTimers();
+    const worker = new FakeWorker();
+    const controller = new EquationController(() => {}, () => {}, () => worker as unknown as Worker);
+    controller.setPage(page("A", [stroke("one", 10)]), {});
+    const lineId = controller.lines[0]!.line.lineId;
+    worker.emit({ type: "ready", requestId: 1, modelId: "test", elapsedMs: 1 });
+    await vi.runOnlyPendingTimersAsync();
+    const first = worker.sent.find((request) => request.type === "recognize");
+    if (!first || first.type !== "recognize") throw new Error("First read was not sent");
+    worker.emit({
+      type: "error",
+      requestId: first.requestId,
+      pageId: first.pageId,
+      lineId: first.lineId,
+      canvasRevisionId: first.canvasRevisionId,
+      code: "inference_failed",
+      elapsedMs: 5,
+    });
+    expect(controller.hasFirstRead(lineId)).toBe(false);
+
+    controller.retry();
+    const init = worker.sent.at(-1);
+    if (!init || init.type !== "init") throw new Error("Retry was not initialized");
+    worker.emit({ type: "ready", requestId: init.requestId, modelId: "test", elapsedMs: 1 });
+    await vi.runOnlyPendingTimersAsync();
+    const second = worker.sent.filter((request) => request.type === "recognize").at(-1);
+    if (!second || second.type !== "recognize") throw new Error("Retry read was not sent");
+    worker.emit({
+      type: "result",
+      requestId: second.requestId,
+      pageId: second.pageId,
+      lineId: second.lineId,
+      canvasRevisionId: second.canvasRevisionId,
+      rawText: "9=",
+      boxes: [{ text: "9=", score: 0.9 }],
+      detMs: 1,
+      recMs: 1,
+      elapsedMs: 2,
+      raster: { width: 20, height: 20, version: "test" },
+    });
+    expect(controller.lines[0]?.result).toMatchObject({ kind: "value", display: "9" });
+    expect(controller.hasFirstRead(lineId)).toBe(false);
+    controller.destroy();
+  });
+
+  it.each([
+    { label: "empty", maskedText: "" },
+    { label: "space-only", maskedText: " " },
+  ])("rejects a valid-looking read when masking leaves a $label box", async ({ maskedText }) => {
+    vi.useFakeTimers();
+    const worker = new FakeWorker();
+    const controller = new EquationController(() => {}, () => {}, () => worker as unknown as Worker);
+    controller.setPage(page("A", [stroke("one", 10)]), {});
+    const lineId = controller.lines[0]!.line.lineId;
+    worker.emit({
+      type: "ready",
+      requestId: 1,
+      modelId: "PP-OCRv6_tiny_det+rec",
+      decoderId: "ctc-mask-v1",
+      elapsedMs: 1,
+    });
+    await vi.runOnlyPendingTimersAsync();
+    const request = worker.sent.find((item) => item.type === "recognize");
+    if (!request || request.type !== "recognize") throw new Error("Read was not sent");
+    worker.emit({
+      type: "result",
+      requestId: request.requestId,
+      pageId: request.pageId,
+      lineId: request.lineId,
+      canvasRevisionId: request.canvasRevisionId,
+      rawText: `${maskedText}9=`,
+      unmaskedRawText: "g9=",
+      boxes: [
+        { text: maskedText, score: 0, unmaskedText: "g", unmaskedScore: 0.9 },
+        { text: "9=", score: 0.8, unmaskedText: "9=", unmaskedScore: 0.8 },
+      ],
+      detMs: 1,
+      recMs: 1,
+      elapsedMs: 2,
+      raster: { width: 20, height: 20, version: "test" },
+    });
+    expect(controller.lines[0]).toMatchObject({
+      phase: "unreadable",
+      rawRead: `${maskedText}9=`,
+      unmaskedRawRead: "g9=",
+      result: null,
+    });
+    expect(controller.lines[0]?.message).toContain("omitted part");
+    const sample = controller.diagnosticSampleFor(lineId, "9=", {
+      userAgent: "test",
+      language: "en",
+      devicePixelRatio: 1,
+      online: true,
+      exportedAt: "2026-10-04T00:00:00.000Z",
+    });
+    expect(sample?.firstRead).toMatchObject({ normalizedText: null, result: null });
     controller.destroy();
   });
 
@@ -193,6 +310,7 @@ describe("EquationController", () => {
     });
     expect(controller.lines[0]?.result).toMatchObject({ kind: "value", display: "22" });
     expect(controller.lines[0]?.source).toBe("corrected");
+    expect(controller.lines[0]?.rawRead).toBe("");
     expect(corrections).toHaveBeenCalledOnce();
     controller.destroy();
   });
