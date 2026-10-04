@@ -95,10 +95,15 @@ failed earlier gate into a pass.
   has a first-read scorer for private evidence, additional model-failure
   and accessibility checks, more legible mobile controls, and a
   pinned-Chromium browser gate in CI.
-  On Windows, `npx tsc --noEmit`, `npm test` (190 app and 15 Node tests),
-  and `npm run test:e2e` (12 browser tests) passed. These are not a fresh
-  handwriting score, a physical-device frame trace, visual approval,
-  a hosted CI result, or release clearance.
+  On Windows, `npx tsc --noEmit`, `npm test`, and the production browser
+  suite passed before the masking experiment. The later `feat/masked-ocr`
+  working branch passed 193 app tests, 20 Node tests, and 17 browser tests
+  on 4 October. These include partial-box rejection, first-read retry
+  integrity, future-record recovery, simulated mobile DPR/touch cancel,
+  local-only production requests, and first-install offline retry. The
+  branch is not a frozen clean checkout or hosted CI result. Fresh
+  handwriting, physical-device frame/memory/latency checks, owner visual
+  approval, third-party notices, and redistribution decision remain open.
 
 The links below give each elementary deep dive its **primary build phase**,
 not permission to defer its cross-phase tests. For example, the Phase-2

@@ -1,8 +1,9 @@
 # CalcInk V1: Handwriting Recognition Benchmark
 
 Status: **planned, not passed**. This protocol tests the rebuilt V1 with
-the selected local PP-OCRv6 tiny detection-plus-recognition pipeline through
-the production UI, line grouping, normalization, parser, and result display.
+the selected local PP-OCRv6 tiny detection-plus-recognition pipeline and
+experimental `ctc-mask-v1` decoder through the production UI, line grouping,
+normalization, parser, and result display.
 Fake Worker or parser-only tests cannot supply a handwriting score. See the
 [master design](DESIGN.md) and
 [recognition evidence deep dive](design/08-recognition-evidence.md).
@@ -13,9 +14,10 @@ recorded or scored.
 
 ## Exploratory V1 Replay, 4 October
 
-The six distinct, local `prototype/evidence/` drawings were replayed once
-through the production V1 recognition Worker on a desktop. The normalized
-raw reads were `6*9=`, `9=`, `6+3=`, `9+3=`, `9*1=`, and `11+11=`, matching
+Before the decoder experiment, six distinct, local `prototype/evidence/`
+drawings were replayed once through the production V1 recognition Worker
+on a desktop. The normalized raw reads were `6*9=`, `9=`, `6+3=`,
+`9+3=`, `9*1=`, and `11+11=`, matching
 all six intended strings. The same strokes were then seeded into a local
 V1 page: the UI grouped six lines and displayed `54`, `9`, `9`, `12`,
 `9`, and `22` without correction. The earlier prototype Paddle lab read
@@ -23,6 +25,11 @@ five of those six exactly; its `9=` attempt read `g =`. This is useful
 development evidence only: the ink was reused on a desktop, and seeding
 the page bypassed fresh pointer capture. It is **not** a fresh handwriting
 attempt, phone result, latency gate, or release score.
+
+A separate saved private `4=` development export originally recorded
+unrestricted `4二`. A current `ctc-mask-v1` replay of the same ink yielded
+restricted `4`, unrestricted `二4`, and no answer. This is an incomplete
+read, not a fix, and is not part of the fresh acceptance set.
 
 ## 1. Two Separate Sets
 
@@ -32,8 +39,8 @@ to classify failures and compare one controlled recognition change at a
 time. Obtain explicit permission before saving or sharing any other
 person's strokes; sample capture is opt-in and local by default.
 
-After implementing and freezing the PaddleOCR pipeline, collect a **fresh
-acceptance set** of the same 20 expressions in three new sessions (60
+After implementing and freezing the PaddleOCR pipeline and decoder, collect
+a **fresh acceptance set** of the same 20 expressions in three new sessions (60
 attempts). Do not reuse a development attempt as acceptance evidence,
 redraw a failure quietly, or tune on the acceptance set while still
 reporting it as independent. If a fix is made after acceptance failure,
@@ -83,13 +90,17 @@ ground truth.
 
 Record session ID, expression number, exact intended notation, device,
 browser, online/offline state, input method, pen width, first uncorrected
-raw Worker readback, first normalized canonical readback, first result,
-final pen-up-to-settled-result time, and whether marks were split into
-different lines or clipped. Score exact transcription against the
-intended canonical expression after **notation-only** normalization
+restricted Worker readback, unrestricted diagnostic readback, first
+normalized canonical readback, first result, final pen-up-to-settled-result
+time, and whether marks were split into different lines or clipped. Score
+the restricted read used for the answer against the intended canonical
+expression after **notation-only** normalization
 (for example drawn `×` to canonical `*`); do not repair a digit from
-context or use the parser to guess missing tokens. An alphabetic OCR
-read such as `g=` is a miss, not an automatically converted `9=`.
+context or use the parser to guess missing tokens. An unrestricted read
+such as `g=` is not itself a correct `9=`; only the restricted first read
+and first result can satisfy the score. Keep the unrestricted read to
+detect when masking forced a plausible but wrong arithmetic character;
+it cannot replace the scored read.
 Re-running the same saved strokes is a latency repeat, not a new
 handwriting attempt. Record a later manual correction and its result
 **separately**. An automatic answer is not correct merely
@@ -142,8 +153,12 @@ After freezing the build, generate the 60-row manifest once:
 node scripts/score-benchmark.mjs --template local-assets/benchmark/attempts.json
 ```
 
-`local-assets/` is Git-ignored. Fill `frozenCommit`, named `device`,
-`browser`, `inputMethod`, and `penWidth`; note any per-attempt variation in
+`local-assets/` is Git-ignored. Freeze the exact decoder patch along with
+the build; the scorer requires `model.decoder` to match `ctc-mask-v1`.
+An older service worker may serve baseline code until its update is
+accepted and the page reloads. Verify this decoder ID in each export
+before recording it. Fill `frozenCommit`, named `device`, `browser`,
+`inputMethod`, and `penWidth`; note any per-attempt variation in
 `notes`. For each fresh attempt, export its first read from the app's
 **Readback > Export sample** control before correction, ink edit, page
 switch, or reload. Put that JSON next to `attempts.json` and set the row's
@@ -156,6 +171,10 @@ final pen-up until the visible answer settles with the model already warm;
 use `null` if no answer appears. Record clipping, split lines, input method
 changes, and corrections in `notes`, not as automatic successes. The
 export's Worker `elapsedMs` is **not** pen-up-to-answer latency.
+If recognition errors and Retry later succeeds, the retry is not a first
+read and cannot replace the failed attempt in this worksheet. A detected
+box emptied by masking also counts as a miss, even if the remaining boxes
+spell a valid equation.
 
 ```powershell
 node scripts/score-benchmark.mjs local-assets/benchmark/attempts.json

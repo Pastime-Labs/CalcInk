@@ -89,6 +89,29 @@ shipped code, fonts, model assets, and runtime notices; include applicable
 texts in the released source/build and record the owner's final
 redistribution decision before public hosting.
 
+**Local candidate check, 4 October 2026:** On `feat/masked-ocr`, the
+uncommitted working build passed `npx tsc --noEmit`, `npm test` (193 app and
+20 Node tests), and `npm run test:e2e` (17 pinned-Chromium tests). The
+production browser suite exercised real OCR after offline reload, a failed
+first service-worker registration followed by successful Retry, a
+future-version IndexedDB record and recovery export, simulated DPR-2
+mobile touch cancellation, keyboard focus, and direct app/model/runtime
+requests confined to the preview origin. Local phone-width and desktop
+screenshots were inspected; owner visual approval is still open. The
+final build generated 24 precache entries, about 47.7 MiB. These checks
+are not a clean checkout of the candidate commit, hosted CI, fresh
+handwriting score, physical-phone trace, or permission to publish models.
+
+The installed production dependency tree has 25 packages, including
+OFL-1.1 fonts, Apache-2.0 PaddleOCR.js and OpenCV.js, MIT ONNX Runtime
+packages, Boost-licensed `clipper-lib`, and other transitive code. This
+tree is not proof that every dependency's bytes ship. The production
+bundle contains two large Workers, ONNX Runtime WASM, local font assets,
+and both model archives. The locally patched PaddleOCR.js Worker must be
+identified as modified in release notices. Applicable full license and
+third-party notice texts are not yet bundled, and the owner has not
+recorded the redistribution decision.
+
 ## Development defect workflow
 
 Fix bugs found during development when discovered. Keep one outcome issue
