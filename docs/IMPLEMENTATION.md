@@ -100,8 +100,10 @@ failed earlier gate into a pass.
   working branch passed 193 app tests, 20 Node tests, and 17 browser tests
   on 4 October. These include partial-box rejection, first-read retry
   integrity, future-record recovery, simulated mobile DPR/touch cancel,
-  local-only production requests, and first-install offline retry. The
-  branch is not a frozen clean checkout or hosted CI result. Fresh
+  local-only production requests, and first-install offline retry. An
+  isolated clean clone of committed `e20e491` then repeated `npm ci`,
+  model download and hash verification, build, unit tests, and all 17
+  browser tests on an isolated port. This is not hosted CI. Fresh
   handwriting, physical-device frame/memory/latency checks, owner visual
   approval, third-party notices, and redistribution decision remain open.
 

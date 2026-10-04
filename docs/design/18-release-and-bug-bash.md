@@ -112,6 +112,18 @@ identified as modified in release notices. Applicable full license and
 third-party notice texts are not yet bundled, and the owner has not
 recorded the redistribution decision.
 
+**Committed clean-clone check:** A new `git clone --no-local` of
+`e20e491` without copied assets or `node_modules` passed `npm ci`;
+the post-install SDK Worker patch matched SHA-256
+`f3929e5f7b3083bfcf895119f8a60ebe46b0b2b7e589c938c059e9756fd5a61a`.
+`npm run build` downloaded both official model archives, verified the
+pinned hashes, and built the PWA. `npm test` passed 193 app and 20 Node
+tests; `npx playwright test` passed all 17 tests against that clone's own
+preview on port 43129. The first clean clone exposed a Windows CRLF
+decoder-patch failure; `e20e491` includes the verified fix. This is
+local reproducibility evidence, not a public checkout, GitHub CI run,
+physical-device pass, or distribution clearance.
+
 ## Development defect workflow
 
 Fix bugs found during development when discovered. Keep one outcome issue
