@@ -121,7 +121,8 @@ async function main() {
   if (start < 0 || end < 0 || source.indexOf(decoderStart, start + 1) >= 0) {
     throw new Error("PaddleOCR CTC decoder location changed");
   }
-  source = source.slice(0, start) + decodeCTCSample.toString() + source.slice(end);
+  const decoder = decodeCTCSample.toString().replaceAll("\r\n", "\n");
+  source = source.slice(0, start) + decoder + source.slice(end);
   source = replaceOnce(source, oldRecMap, newRecMap);
   source = replaceOnce(source, oldItem, newItem);
   source = replaceOnce(source, oldFilter, newFilter);
