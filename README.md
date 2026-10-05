@@ -120,7 +120,7 @@ and offline checks, final public-checkout and hosted-CI paths, and the
 owner redistribution decision are **not yet passed**.
 The experimental CTC mask has not passed a fresh handwriting comparison or
 release gate.
-An isolated clone of committed `e20e491` installed from scratch,
+An isolated clone of the tree now at `b3ab086` installed from scratch,
 downloaded and hash-verified both official model archives, then passed
 the build, 193 app tests, 20 Node tests, and 17 browser tests; see the
 [release evidence snapshot](docs/design/18-release-and-bug-bash.md#evidence-snapshot-4-october-2026).

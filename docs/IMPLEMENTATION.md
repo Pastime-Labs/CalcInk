@@ -66,8 +66,8 @@ failed earlier gate into a pass.
   reproducible prototype snapshot, third-party notice bundle, and
   owner redistribution decision have not been evidenced here.
 - **Phase 1:** Root Vite/strict-TypeScript app, CI checks, and hash-verified
-  asset preparation are implemented. A fresh local clone of committed
-  `4f1833c` installed and built after downloading both archives from the
+  asset preparation are implemented. A fresh local clone of the tree now at
+  `6b5d54b` installed and built after downloading both archives from the
   official host; unit and desktop browser suites passed. This does not
   cover the final candidate or a public checkout. No hosted GitHub CI/PR
   run exists yet, so the public reproducibility gate remains open; see the
@@ -101,7 +101,7 @@ failed earlier gate into a pass.
   on 4 October. These include partial-box rejection, first-read retry
   integrity, future-record recovery, simulated mobile DPR/touch cancel,
   local-only production requests, and first-install offline retry. An
-  isolated clean clone of committed `e20e491` then repeated `npm ci`,
+  isolated clean clone of the tree now at `b3ab086` then repeated `npm ci`,
   model download and hash verification, build, unit tests, and all 17
   browser tests on an isolated port. This is not hosted CI. Fresh
   handwriting, physical-device frame/memory/latency checks, owner visual

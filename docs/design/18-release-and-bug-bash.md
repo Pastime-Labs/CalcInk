@@ -61,8 +61,13 @@ redistribution clearance.
 ## Evidence snapshot, 4 October 2026
 
 This is a local release-readiness snapshot, **not** Phase 5 or 6 sign-off.
-Created with `git clone --no-local . <temporary-directory>` from committed
-`4f1833c0977353824fd4284a3a6188f5a03edc09`, without copied assets
+Before the first push, the five bootstrap commits were re-attributed to
+the solo maintainer. Their dates and file trees did not change. The local
+checks below ran before that author-only rewrite and were not rerun on
+the new commit IDs.
+Created with `git clone --no-local . <temporary-directory>` from the
+file tree now committed as
+`6b5d54b99fb3b5c58d14982e5c8bc46df3b8c4f4`, without copied assets
 or `node_modules`, on Windows with Node `v24.19.0`, npm `11.17.0`,
 Playwright `1.63.0`, and installed Chrome `154.0.8037.93`:
 
@@ -112,21 +117,21 @@ identified as modified in release notices. Applicable full license and
 third-party notice texts are not yet bundled, and the owner has not
 recorded the redistribution decision.
 
-**Committed clean-clone check:** A new `git clone --no-local` of
-`e20e491` without copied assets or `node_modules` passed `npm ci`;
+**Committed clean-clone check:** A new `git clone --no-local` of the tree
+now at `b3ab086` without copied assets or `node_modules` passed `npm ci`;
 the post-install SDK Worker patch matched SHA-256
 `f3929e5f7b3083bfcf895119f8a60ebe46b0b2b7e589c938c059e9756fd5a61a`.
 `npm run build` downloaded both official model archives, verified the
 pinned hashes, and built the PWA. `npm test` passed 193 app and 20 Node
 tests; `npx playwright test` passed all 17 tests against that clone's own
 preview on port 43129. The first clean clone exposed a Windows CRLF
-decoder-patch failure; `e20e491` includes the verified fix. This is
+decoder-patch failure; `b3ab086` includes the verified fix. This is
 local reproducibility evidence, not a public checkout, GitHub CI run,
 physical-device pass, or distribution clearance.
 
-**Current-HEAD follow-up, 4 October 2026:** A fresh local clone of
-`e4a23f8` without copied assets or dependencies passed `npm ci`, pinned
-model/runtime asset verification, `npx tsc --noEmit`, `npm run build`,
+**Current-HEAD follow-up, 4 October 2026:** A fresh local clone of the
+tree now at `e05704d` without copied assets or dependencies passed
+`npm ci`, pinned model/runtime asset verification, `npx tsc --noEmit`, `npm run build`,
 193 app tests, 20 Node tests, and 17 Playwright tests on an isolated port.
 The build precached 24 entries (about 47.7 MiB). A production-dependency
 `npm audit --omit=dev --audit-level=high` reported zero known

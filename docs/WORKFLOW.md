@@ -126,6 +126,10 @@ outcome record and code/tests are the durable trail.
   production build and Playwright's Chromium browser installed with
   `npx playwright install chromium`. Record any skipped non-typecheck
   check and why; never commit while the TypeScript gate fails.
+- **Keep one Git identity:** Never set or override the repository's Git
+  identity in an agent command: no `git config user.*`, `git -c user.name=...`,
+  `git -c user.email=...`, or `--author`. Use the existing repository identity
+  and verify it before committing.
 - **Commit atomically:** Use
   `<type>(<scope>): <imperative lowercase summary>` with a header under
   50 characters and no trailing period. Allowed types are `feat`, `fix`,
