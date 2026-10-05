@@ -124,6 +124,27 @@ decoder-patch failure; `e20e491` includes the verified fix. This is
 local reproducibility evidence, not a public checkout, GitHub CI run,
 physical-device pass, or distribution clearance.
 
+**Current-HEAD follow-up, 4 October 2026:** A fresh local clone of
+`e4a23f8` without copied assets or dependencies passed `npm ci`, pinned
+model/runtime asset verification, `npx tsc --noEmit`, `npm run build`,
+193 app tests, 20 Node tests, and 17 Playwright tests on an isolated port.
+The build precached 24 entries (about 47.7 MiB). A production-dependency
+`npm audit --omit=dev --audit-level=high` reported zero known
+vulnerabilities. This is still local evidence, not hosted CI or a public
+deployment.
+
+The private 60-attempt worksheet has zero completed attempts. The owner
+reports visually smooth drawing and accurate outputs in mobile Chrome, but
+did not provide a frame trace, exact first-read counts, or named-device
+latency. The owner also reports buggy mobile UI. A simulated-viewport audit
+reproduced Readback covering mobile controls, its close control becoming
+inaccessible in a short viewport, and right-edge answers appearing outside
+the visible paper. The empty-page instruction also has insufficient text
+contrast. These are open frontend-rebuild findings, not fixed defects or a
+physical-device result. Applicable bundled license/notice
+texts, the owner's model-redistribution decision, hosted CI/demo, and the
+remaining Phase-5 evidence are still release blockers.
+
 ## Development defect workflow
 
 Fix bugs found during development when discovered. Keep one outcome issue
