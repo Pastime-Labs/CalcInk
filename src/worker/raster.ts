@@ -1,6 +1,7 @@
 import type { Point, Stroke } from "../canvas/types";
+import { pointWidth, segmentWidths, validInkColor, validStrokeStyle } from "../canvas/brush";
 
-export const RASTER_VERSION = "paddle-raster-v1";
+export const RASTER_VERSION = "paddle-raster-v2";
 
 const MAX_STROKES = 256;
 const MAX_POINTS = 20_000;
@@ -49,6 +50,8 @@ export function planRaster(strokes: readonly Stroke[]): RasterPlan {
   for (const stroke of strokes) {
     if (!stroke || !Number.isFinite(stroke.width)
       || stroke.width <= 0 || stroke.width > MAX_STROKE_WIDTH
+      || (stroke.color !== undefined && !validInkColor(stroke.color))
+      || (stroke.style !== undefined && !validStrokeStyle(stroke.style))
       || !Array.isArray(stroke.points) || stroke.points.length === 0) {
       throw new InvalidInkError();
     }
@@ -76,10 +79,6 @@ export function planRaster(strokes: readonly Stroke[]): RasterPlan {
   return { left, top, padding, scale, width, height };
 }
 
-function pressureWidth(width: number, pressure: number | undefined): number {
-  return width * (pressure === undefined ? 1 : 0.45 + pressure * 0.55);
-}
-
 function drawStroke(context: OffscreenCanvasRenderingContext2D, stroke: Stroke): void {
   const { points, width } = stroke;
   context.strokeStyle = INK_COLOR;
@@ -90,13 +89,13 @@ function drawStroke(context: OffscreenCanvasRenderingContext2D, stroke: Stroke):
     context.beginPath();
     context.arc(
       points[0].x, points[0].y,
-      pressureWidth(width, points[0].pressure) / 2, 0, Math.PI * 2,
+      pointWidth(width, points[0]) / 2, 0, Math.PI * 2,
     );
     context.fill();
-  } else if (points.some((point) => point.pressure !== undefined)) {
+  } else if (points.some((point) => point.pressure !== undefined || point.t !== undefined)) {
+    const widths = segmentWidths(stroke);
     for (let i = 1; i < points.length; i++) {
-      const pressure = ((points[i - 1].pressure ?? 1) + (points[i].pressure ?? 1)) / 2;
-      context.lineWidth = pressureWidth(width, pressure);
+      context.lineWidth = widths[i - 1];
       context.beginPath();
       context.moveTo(points[i - 1].x, points[i - 1].y);
       context.lineTo(points[i].x, points[i].y);

@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Stroke } from "../canvas/types";
-import { InvalidInkError, planRaster } from "./raster";
+import { InvalidInkError, planRaster, rasterizeLine } from "./raster";
 
 function stroke(id: string, x: number, y: number, width = 4): Stroke {
   return { id, width, points: [{ x, y }] };
 }
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("planRaster", () => {
   it("pads separated marks without connecting pen lifts", () => {
@@ -43,8 +45,36 @@ describe("planRaster", () => {
     { strokes: [stroke("nan", NaN, 0)] },
     { strokes: [stroke("bad-width", 0, 0, 0)] },
     { strokes: [{ id: "bad-pressure", width: 4, points: [{ x: 0, y: 0, pressure: 2 }] }] },
+    { strokes: [{ ...stroke("bad-color", 0, 0), color: "red" }] },
+    { strokes: [{ ...stroke("bad-style", 0, 0), style: "marker" as Stroke["style"] }] },
     { strokes: [{ id: "too-large", width: 4, points: [{ x: 0, y: 0 }, { x: 10_000, y: 0 }] }] },
   ])("rejects malformed or excessive ink %#", ({ strokes }) => {
     expect(() => planRaster(strokes)).toThrow(InvalidInkError);
+  });
+
+  it("rasterizes colored pencil and pen as the same dark OCR ink", () => {
+    const colors: string[] = [];
+    const context = {
+      fillStyle: "",
+      strokeStyle: "",
+      fillRect: vi.fn(),
+      setTransform: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke() { colors.push(this.strokeStyle); },
+    };
+    vi.stubGlobal("OffscreenCanvas", class {
+      getContext() { return context; }
+      transferToImageBitmap() { return {}; }
+    });
+    rasterizeLine([
+      { id: "pencil", width: 4, color: "#ffff00", style: "pencil",
+        points: [{ x: 0, y: 0 }, { x: 10, y: 0 }] },
+      { id: "pen", width: 4, color: "#ff0000", style: "pen",
+        points: [{ x: 20, y: 0 }, { x: 30, y: 0 }] },
+    ]);
+    expect(colors).toEqual(["#263133", "#263133"]);
+    expect(context.fillRect).toHaveBeenCalled();
   });
 });
