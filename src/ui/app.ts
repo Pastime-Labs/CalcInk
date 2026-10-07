@@ -389,7 +389,8 @@ export class NotebookApp {
         lineId: view.line.lineId,
         anchor: view.line.anchor,
         text: resultText(view.result),
-        source: view.source ?? "automatic",
+        source: view.source === "automatic" && view.message
+          ? "masked" : view.source ?? "automatic",
       }];
     });
     this.conflicts = this.renderer.setAnswers(projections);
