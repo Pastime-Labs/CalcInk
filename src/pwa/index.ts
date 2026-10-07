@@ -29,6 +29,8 @@ export function registerOfflineApp(onStatus: (status: OfflineStatus) => void): O
     message: "Downloading offline app and recognition assets.",
   };
   let registration: ServiceWorkerRegistration | undefined;
+  let repairing = false;
+  let reloadAuthorized = false;
   const publish = (next: OfflineStatus) => {
     status = next;
     onStatus(next);
@@ -38,7 +40,18 @@ export function registerOfflineApp(onStatus: (status: OfflineStatus) => void): O
     async applyUpdate(flushPendingSave) {
       if (status.kind !== "update_available") return;
       await flushPendingSave();
-      await updateSW(true);
+      const current = await navigator.serviceWorker.getRegistration(baseUrl.href);
+      if (!current?.waiting) {
+        window.location.reload();
+        return;
+      }
+      reloadAuthorized = true;
+      try {
+        await updateSW(true);
+      } catch (error) {
+        reloadAuthorized = false;
+        throw error;
+      }
     },
     async retryInstall() {
       if (status.kind !== "failed") return;
@@ -54,10 +67,12 @@ export function registerOfflineApp(onStatus: (status: OfflineStatus) => void): O
         message: "Retrying the offline asset install.",
       });
       try {
-        if (!(await navigator.serviceWorker.getRegistration(baseUrl.href))?.active) {
+        let current = await navigator.serviceWorker.getRegistration(baseUrl.href);
+        if (!current?.active) {
           registration = await navigator.serviceWorker.register(new URL("sw.js", baseUrl), {
             scope: baseUrl.href,
           });
+          current = registration;
           observeInstall(registration.installing ?? registration.waiting);
           if (!registration.active) {
             if (!registration.installing && !registration.waiting) {
@@ -66,16 +81,35 @@ export function registerOfflineApp(onStatus: (status: OfflineStatus) => void): O
             return;
           }
         }
-        const cache = await openPrecache(baseUrl);
+        let cache: Cache;
+        try {
+          cache = await openPrecache(baseUrl);
+        } catch {
+          await reinstall(current);
+          return;
+        }
+        let assets: string[];
+        try {
+          assets = await requiredOfflineAssets(cache, baseUrl);
+        } catch {
+          const manifest = (await cache.keys()).find((request) =>
+            new URL(request.url).pathname === new URL("offline-assets.json", baseUrl).pathname);
+          if (manifest) await cache.delete(manifest);
+          await reinstall(current);
+          return;
+        }
         const keys = await cache.keys();
-        for (const asset of await requiredOfflineAssets(cache, baseUrl)) {
+        for (const asset of assets) {
           const url = new URL(asset, baseUrl);
           const model = asset.includes(".tar?");
           const emitted = asset.startsWith("assets/");
           const key = keys.find((request) => model
             ? request.url === url.href
             : new URL(request.url).pathname === url.pathname);
-          if (!key && !model && !emitted) throw new Error(`Missing precache key: ${asset}`);
+          if (!key && !model && !emitted) {
+            await reinstall(current);
+            return;
+          }
           const cached = key ? await cache.match(key) : undefined;
           if (cached?.status === 200 &&
               (!model || (await cached.clone().blob()).size > 0)) continue;
@@ -92,7 +126,8 @@ export function registerOfflineApp(onStatus: (status: OfflineStatus) => void): O
           await cache.put(key ?? url.href, response);
         }
         await verifyReady(true);
-      } catch {
+      } catch (error) {
+        console.error("CalcInk offline install retry failed", error);
         publish({
           kind: "failed",
           message: "Offline setup failed. Drawing remains available; retry when connected.",
@@ -112,7 +147,47 @@ export function registerOfflineApp(onStatus: (status: OfflineStatus) => void): O
   }
 
   const baseUrl = new URL(import.meta.env.BASE_URL, location.origin);
-  const verifyReady = async (failureOnMissing: boolean) => {
+  const reinstall = async (current: ServiceWorkerRegistration | undefined) => {
+    if (current?.waiting) {
+      publish({
+        kind: "update_available",
+        message: "An update is available. Save your work before applying it.",
+      });
+      return;
+    }
+    const script = new URL("sw.js", baseUrl);
+    script.searchParams.set("repair", String(Date.now()));
+    repairing = true;
+    try {
+      registration = await navigator.serviceWorker.register(script, { scope: baseUrl.href });
+      const worker = registration.installing ?? registration.waiting;
+      if (!worker) {
+        repairing = false;
+        await verifyReady(true);
+        return;
+      }
+      const checkState = () => {
+        if (worker.state === "installed") {
+          registration?.waiting?.postMessage({ type: "SKIP_WAITING" });
+        } else if (worker.state === "activated") {
+          repairing = false;
+          void verifyReady(true);
+        } else if (worker.state === "redundant") {
+          repairing = false;
+          publish({
+            kind: "failed",
+            message: "Offline assets could not be installed. Drawing remains available.",
+          });
+        }
+      };
+      worker.addEventListener("statechange", checkState);
+      checkState();
+    } catch (error) {
+      repairing = false;
+      throw error;
+    }
+  };
+  const verifyReady = async (failureOnMissing: boolean): Promise<boolean> => {
     let complete = false;
     try {
       if ((await navigator.serviceWorker.getRegistration(baseUrl.href))?.active) {
@@ -121,7 +196,7 @@ export function registerOfflineApp(onStatus: (status: OfflineStatus) => void): O
     } catch {
       // A missing or inaccessible precache is not proof of offline readiness.
     }
-    if (status.kind === "update_available") return;
+    if (status.kind === "update_available") return complete;
     if (complete) {
       publish({ kind: "ready", message: "Ready offline on this device." });
     } else if (failureOnMissing) {
@@ -130,6 +205,7 @@ export function registerOfflineApp(onStatus: (status: OfflineStatus) => void): O
         message: "Offline setup is incomplete. Connect and retry the install.",
       });
     }
+    return complete;
   };
   const observeInstall = (worker: ServiceWorker | null) => {
     if (!worker) return;
@@ -149,10 +225,19 @@ export function registerOfflineApp(onStatus: (status: OfflineStatus) => void): O
 
   const updateSW = registerSW({
     immediate: true,
+    onNeedReload() {
+      if (reloadAuthorized) {
+        reloadAuthorized = false;
+        window.location.reload();
+      } else {
+        void verifyReady(true);
+      }
+    },
     onOfflineReady() {
       void verifyReady(true);
     },
     onNeedRefresh() {
+      if (repairing) return;
       publish({
         kind: "update_available",
         message: "An update is available. Save your work before applying it.",
@@ -172,10 +257,16 @@ export function registerOfflineApp(onStatus: (status: OfflineStatus) => void): O
         void verifyReady(true);
       }
     },
-    onRegisterError() {
-      publish({
-        kind: "failed",
-        message: "Offline setup failed. Drawing remains available; retry when connected.",
+    onRegisterError(error) {
+      console.error("CalcInk offline registration failed", error);
+      const previous = status;
+      void verifyReady(false).then((complete) => {
+        if (!complete && status === previous && status.kind !== "update_available") {
+          publish({
+            kind: "failed",
+            message: "Offline setup failed. Drawing remains available; retry when connected.",
+          });
+        }
       });
     },
   });
