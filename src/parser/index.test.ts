@@ -13,6 +13,11 @@ describe("normalizeRead", () => {
     });
   });
 
+  it("maps every occurrence of U+4E8C to equals", () => {
+    expect(normalizeRead("11+11\u4e8c")).toEqual({ kind: "canonical", text: "11+11=" });
+    expect(normalizeRead("\u4e8c1\u4e8c2\u4e8c")).toEqual({ kind: "canonical", text: "=1=2=" });
+  });
+
   it("is idempotent", () => {
     for (const raw of ["18+4\u00d73=", "\u2212.5 \u00f7 2 =", "1*2/3="]) {
       const first = normalizeRead(raw);

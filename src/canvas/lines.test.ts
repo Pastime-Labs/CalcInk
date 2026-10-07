@@ -14,6 +14,13 @@ const digit = (id: string, x: number, y: number) => stroke(id, x, y, x + 8, y + 
 const bar = (id: string, x: number, y: number) => stroke(id, x, y, x + 20, y);
 
 describe("equation line grouping", () => {
+  it("keeps a single plain vertical stroke as a line", () => {
+    const one = stroke("one", 50, 42, 50, 150);
+    const lines = groupEquationLines([one]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.strokes).toEqual([one]);
+  });
+
   it("includes ink width in bounds and ignores empty strokes", () => {
     expect(strokeBounds(stroke("a", 0, 0, 10, 20))).toEqual({
       left: -1,
@@ -61,6 +68,19 @@ describe("equation line grouping", () => {
     expect(lines.map((line) => line.strokes.map((mark) => mark.id))).toEqual([
       ["upper"],
       ["lower", "dot", "division-bar"],
+    ]);
+  });
+
+  it("keeps distant whiteboard expressions on the same height separate", () => {
+    const lines = groupEquationLines([
+      digit("left-one", -900, -400),
+      digit("left-two", -878, -400),
+      digit("right-one", 900, -400),
+      digit("right-two", 922, -400),
+    ]);
+    expect(lines.map((line) => line.strokes.map((mark) => mark.id))).toEqual([
+      ["left-one", "left-two"],
+      ["right-one", "right-two"],
     ]);
   });
 

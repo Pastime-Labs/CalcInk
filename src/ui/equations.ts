@@ -42,7 +42,10 @@ type FirstRead = {
     score: number;
     unmaskedText?: string;
     unmaskedScore?: number;
+    poly?: [number, number][];
   }>;
+  detectedBoxes?: number;
+  recognizedCount?: number;
   detMs: number;
   recMs: number;
   elapsedMs: number;
@@ -85,9 +88,15 @@ const PINNED_RECOGNIZER = {
 
 function cloneStrokes(strokes: readonly Stroke[]): Stroke[] {
   return strokes.map((stroke) => ({
-    id: stroke.id,
-    width: stroke.width,
+    ...stroke,
     points: stroke.points.map((point) => ({ ...point })),
+  }));
+}
+
+function cloneBoxes(boxes: FirstRead["boxes"]): FirstRead["boxes"] {
+  return boxes.map((box) => ({
+    ...box,
+    poly: box.poly?.map(([x, y]) => [x, y]),
   }));
 }
 
@@ -258,8 +267,8 @@ export class EquationController {
     if (!first) return null;
     const normalized = normalizeRead(intendedExpression);
     if (normalized.kind !== "canonical") throw new Error(normalized.message);
-    if (!normalized.text.endsWith("=")) throw new Error("Finish the intended equation with =.");
-    const result = evaluate(normalized.text);
+    const result = evaluate(normalized.text.endsWith("=")
+      ? normalized.text : `${normalized.text}=`);
     if (result.kind === "syntax") throw new Error(result.message);
     const pinned = first.modelId === PINNED_MODEL_ID;
     return {
@@ -272,7 +281,9 @@ export class EquationController {
         unmaskedRawText: first.unmaskedRawText,
         normalizedText: first.normalizedText,
         result: first.result ? { ...first.result } : null,
-        boxes: first.boxes.map((box) => ({ ...box })),
+        boxes: cloneBoxes(first.boxes),
+        detectedBoxes: first.detectedBoxes,
+        recognizedCount: first.recognizedCount,
         detMs: first.detMs,
         recMs: first.recMs,
         elapsedMs: first.elapsedMs,
@@ -487,7 +498,9 @@ export class EquationController {
         view.normalizedRead = normalized.text;
         if (!normalized.text.endsWith("=")) {
           view.phase = "incomplete";
-          view.message = "Finish with =.";
+          view.message = normalized.text
+            ? "No final = was recognized. Check the ink or correct the read."
+            : "No text was recognized. Check the ink or correct the read.";
         } else {
           const result = evaluate(normalized.text);
           view.result = result;
@@ -510,7 +523,9 @@ export class EquationController {
           unmaskedRawText: response.unmaskedRawText,
           normalizedText: !omittedBox && normalized.kind === "canonical" ? normalized.text : null,
           result: view.result ? { ...view.result } : null,
-          boxes: response.boxes.map((box) => ({ ...box })),
+          boxes: cloneBoxes(response.boxes),
+          detectedBoxes: response.detectedBoxes,
+          recognizedCount: response.recognizedCount,
           detMs: response.detMs,
           recMs: response.recMs,
           elapsedMs: response.elapsedMs,

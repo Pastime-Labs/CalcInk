@@ -32,7 +32,7 @@ function filled() {
       },
       model: {
         id: "PP-OCRv6_tiny_det+rec",
-        decoder: "ctc-mask-v1",
+        decoder: "ctc-mask-v2",
         detector: {
           id: "PP-OCRv6_tiny_det",
           archiveSha256: "ff6ab415b0a6e0c488550f2fb5d5046f1719848df220b2dc21b56402a65bc05d",
@@ -164,11 +164,13 @@ test("rejects a different model and a timing for an unreadable answer", () => {
   const { samples, score } = filled();
   const sample = samples.get("S1-1.json");
   sample.model.id = "different-model";
-  assert.throws(score, /frozen V1 pins/);
+  assert.throws(score, /frozen model\/decoder pins/);
   sample.model.id = "PP-OCRv6_tiny_det+rec";
-  sample.model.decoder = null;
-  assert.throws(score, /frozen V1 pins/);
   sample.model.decoder = "ctc-mask-v1";
+  assert.throws(score, /frozen model\/decoder pins/);
+  sample.model.decoder = null;
+  assert.throws(score, /frozen model\/decoder pins/);
+  sample.model.decoder = "ctc-mask-v2";
   sample.firstRead.result = null;
   assert.throws(score, /no answer was shown/);
 });

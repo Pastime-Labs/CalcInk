@@ -24,7 +24,7 @@ const CATEGORIES = {
 const SESSIONS = ["S1", "S2", "S3"];
 const MODEL = {
   id: "PP-OCRv6_tiny_det+rec",
-  decoder: "ctc-mask-v1",
+  decoder: "ctc-mask-v2",
   detector: {
     id: "PP-OCRv6_tiny_det",
     archiveSha256: "ff6ab415b0a6e0c488550f2fb5d5046f1719848df220b2dc21b56402a65bc05d",
@@ -147,7 +147,7 @@ export function scoreBenchmark(manifest, loadSample) {
           model.detector?.archiveSha256 !== MODEL.detector.archiveSha256 ||
           model.recognizer?.id !== MODEL.recognizer.id ||
           model.recognizer?.archiveSha256 !== MODEL.recognizer.archiveSha256) {
-        throw new Error(`${key}: exported model does not match the frozen V1 pins`);
+        throw new Error(`${key}: exported model does not match the frozen model/decoder pins`);
       }
     }
     results.set(key, exact);

@@ -53,7 +53,7 @@ export function validateSample(sample) {
 
 function normalizeNotation(text) {
   return text.replaceAll(" ", "").replaceAll("×", "*")
-    .replaceAll("÷", "/").replaceAll("−", "-");
+    .replaceAll("÷", "/").replaceAll("−", "-").replaceAll("\u4e8c", "=");
 }
 
 export function compareRead(rawText, intendedExpression) {
@@ -174,7 +174,10 @@ async function main() {
   const sample = validateSample(JSON.parse(await readFile(file, "utf8")));
   const workerPath = await builtWorkerPath();
   const { modelId, decoderId, modelLoadMs, result } = await replay(preview, workerPath, sample.strokes);
-  const { rawText, unmaskedRawText, boxes, detMs, recMs, elapsedMs, raster } = result;
+  const {
+    rawText, unmaskedRawText, boxes, detectedBoxes, recognizedCount,
+    detMs, recMs, elapsedMs, raster,
+  } = result;
   const { normalizedRead, exactRead } = compareRead(rawText, sample.intendedExpression);
   console.log(JSON.stringify({
     intendedExpression: sample.intendedExpression,
@@ -183,6 +186,8 @@ async function main() {
     normalizedRead,
     exactRead,
     boxes,
+    detectedBoxes,
+    recognizedCount,
     detMs,
     recMs,
     elapsedMs,
