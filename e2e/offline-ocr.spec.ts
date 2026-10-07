@@ -1,6 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import type { RecognitionResponse } from "../src/worker/protocol";
+import { createNotebook, reloadNotebook } from "./notebook";
+
+async function openReadback(page: Page): Promise<void> {
+  await page.locator("#more-button").click();
+  await page.locator("#readback-button").click();
+}
 
 async function savedPageRecords(page: Page): Promise<string> {
   return page.evaluate(() => new Promise<string>((resolve, reject) => {
@@ -16,7 +22,9 @@ async function savedPageRecords(page: Page): Promise<string> {
 }
 
 async function drawPath(page: Page, points: Array<[number, number]>): Promise<void> {
-  const bounds = await page.locator("#drawing-surface").boundingBox();
+  const surface = page.locator("#drawing-surface");
+  await surface.scrollIntoViewIfNeeded();
+  const bounds = await surface.boundingBox();
   if (!bounds) throw new Error("Drawing surface is not visible");
   await page.mouse.move(bounds.x + points[0][0], bounds.y + points[0][1]);
   await page.mouse.down();
@@ -38,11 +46,9 @@ test("cached model runs a fresh OCR request after offline reload", async ({ page
     }
   });
 
-  await page.goto("/");
-  await page.waitForFunction(
-    () => document.body.innerText.includes("Ready offline on this device.")
-      && document.body.innerText.includes("Recognition ready"),
-  );
+  await createNotebook(page);
+  await expect(page.locator("#offline-status")).toHaveText("Ready offline on this device.", { timeout: 90_000 });
+  await expect(page.locator("#recognition-status")).toHaveText("Recognition ready", { timeout: 90_000 });
 
   const workerUrl = page.workers().find((worker) => /recognition\.worker-.*\.js/.test(worker.url()))?.url();
   expect(workerUrl, "production app Worker is loaded").toBeTruthy();
@@ -70,8 +76,8 @@ test("cached model runs a fresh OCR request after offline reload", async ({ page
 
   offlineAssets.length = 0;
   await context.setOffline(true);
-  await page.reload();
-  await page.waitForFunction(() => document.body.innerText.includes("Recognition ready"));
+  await reloadNotebook(page);
+  await expect(page.locator("#recognition-status")).toHaveText("Recognition ready", { timeout: 90_000 });
   expect(await page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
 
   const responses = await page.evaluate(async (url): Promise<RecognitionResponse[]> => {
@@ -143,10 +149,9 @@ test("cached model runs a fresh OCR request after offline reload", async ({ page
 });
 
 test("offline retry repairs a model without losing pages or creating an update loop", async ({ page, context }) => {
-  await page.goto("/");
-  await page.waitForFunction(() =>
-    document.body.innerText.includes("Ready offline on this device.")
-    && document.body.innerText.includes("Saved on this device"));
+  await createNotebook(page);
+  await expect(page.locator("#offline-status")).toHaveText("Ready offline on this device.", { timeout: 90_000 });
+  await expect(page.locator("#save-status")).toHaveText("Saved on this device");
   const pagesBefore = await savedPageRecords(page);
 
   const removed = await page.evaluate(async () => {
@@ -158,15 +163,16 @@ test("offline retry repairs a model without losing pages or creating an update l
     return model ? cache.delete(model) : false;
   });
   expect(removed).toBe(true);
-  await page.reload();
+  await reloadNotebook(page);
   await expect(page.locator("#offline-status")).toContainText("Offline setup is incomplete");
+  await expect(page.locator("#offline-status")).toBeVisible();
   await expect(page.locator("#retry-offline")).toBeVisible();
 
   await context.setOffline(true);
   await page.locator("#retry-offline").click();
   await expect(page.locator("#offline-status")).toContainText("Reconnect before retrying");
-  await page.reload();
-  await expect(page.locator("#page-title")).toHaveText("Untitled page");
+  await reloadNotebook(page);
+  await expect(page.locator("#page-title")).toHaveText("Page 1");
   expect(await savedPageRecords(page)).toBe(pagesBefore);
 
   await context.setOffline(false);
@@ -179,20 +185,20 @@ test("offline retry repairs a model without losing pages or creating an update l
   await page.locator("#retry-offline").click();
   await expect(page.locator("#offline-status")).toHaveText("Ready offline on this device.");
   expect(await savedPageRecords(page)).toBe(pagesBefore);
-  await page.reload();
+  await reloadNotebook(page);
   await expect(page.locator("#offline-status")).toHaveText("Ready offline on this device.");
   await expect(page.locator("#update-button")).toBeHidden();
 
   await context.setOffline(true);
-  await page.reload();
-  await expect(page.locator("#page-title")).toHaveText("Untitled page");
+  await reloadNotebook(page);
+  await expect(page.locator("#page-title")).toHaveText("Page 1");
   await expect(page.locator("#offline-status")).toContainText("Offline; app assets installed");
   await expect(page.locator("#recognition-status")).toContainText("Recognition ready");
   expect(await savedPageRecords(page)).toBe(pagesBefore);
 });
 
-test("retry reports a missing non-model precache key", async ({ page, context }) => {
-  await page.goto("/");
+test("retry reinstalls a missing revisioned precache key", async ({ page, context }) => {
+  await createNotebook(page);
   await expect(page.locator("#offline-status")).toHaveText("Ready offline on this device.", { timeout: 90_000 });
   const pagesBefore = await savedPageRecords(page);
   const removed = await page.evaluate(async () => {
@@ -204,20 +210,82 @@ test("retry reports a missing non-model precache key", async ({ page, context })
   });
   expect(removed).toBe(true);
 
-  await page.reload();
+  await reloadNotebook(page);
   await expect(page.locator("#offline-status")).toContainText("Offline setup is incomplete");
   await page.locator("#retry-offline").click();
-  await expect(page.locator("#offline-status")).toContainText("Offline setup failed");
+  await expect(page.locator("#offline-status")).toHaveText("Ready offline on this device.", {
+    timeout: 90_000,
+  });
   expect(await savedPageRecords(page)).toBe(pagesBefore);
+  await reloadNotebook(page);
+  await expect(page.locator("#offline-status")).toContainText("An update is available");
+  await page.locator("#update-button").click();
+  await expect(page.locator("#offline-status")).toHaveText("Ready offline on this device.");
+  await expect(page.locator("#update-button")).toBeHidden();
 
   await context.setOffline(true);
-  await page.reload();
-  await expect(page.locator("#page-title")).toHaveText("Untitled page");
+  await reloadNotebook(page);
+  await expect(page.locator("#page-title")).toHaveText("Page 1");
+  await expect(page.locator("#offline-status")).toContainText("Offline; app assets installed");
   expect(await savedPageRecords(page)).toBe(pagesBefore);
 });
 
+test("retry reinstalls when the whole precache is missing", async ({ page, context }) => {
+  await createNotebook(page);
+  await expect(page.locator("#offline-status")).toHaveText("Ready offline on this device.", {
+    timeout: 90_000,
+  });
+  const pagesBefore = await savedPageRecords(page);
+  const removed = await page.evaluate(async () => {
+    const cacheName = (await caches.keys()).find((name) => name.startsWith("workbox-precache"));
+    return cacheName ? caches.delete(cacheName) : false;
+  });
+  expect(removed).toBe(true);
+
+  await reloadNotebook(page);
+  await expect(page.locator("#offline-status")).toContainText("Offline setup is incomplete");
+  await page.locator("#retry-offline").click();
+  await expect(page.locator("#offline-status")).toHaveText("Ready offline on this device.", {
+    timeout: 90_000,
+  });
+  expect(await savedPageRecords(page)).toBe(pagesBefore);
+
+  await context.setOffline(true);
+  await reloadNotebook(page);
+  await expect(page.locator("#offline-status")).toContainText("Offline; app assets installed");
+  await expect(page.locator("#page-title")).toHaveText("Page 1");
+  expect(await savedPageRecords(page)).toBe(pagesBefore);
+});
+
+test("retry restores a missing offline asset list", async ({ page, context }) => {
+  await createNotebook(page);
+  await expect(page.locator("#offline-status")).toHaveText("Ready offline on this device.", {
+    timeout: 90_000,
+  });
+  const cacheName = await page.evaluate(async () => {
+    const name = (await caches.keys()).find((value) => value.startsWith("workbox-precache"));
+    if (!name) return null;
+    const cache = await caches.open(name);
+    const key = (await cache.keys()).find((request) =>
+      new URL(request.url).pathname.endsWith("/offline-assets.json"));
+    return key && await cache.delete(key) ? name : null;
+  });
+  expect(cacheName).not.toBeNull();
+
+  await reloadNotebook(page);
+  await expect(page.locator("#offline-status")).toContainText("Offline setup is incomplete");
+  await page.locator("#retry-offline").click();
+  await expect(page.locator("#offline-status")).toHaveText("Ready offline on this device.", {
+    timeout: 90_000,
+  });
+
+  await context.setOffline(true);
+  await reloadNotebook(page);
+  await expect(page.locator("#offline-status")).toContainText("Offline; app assets installed");
+});
+
 test("missing hashed bundle chunk is not masked by another cache and can be repaired", async ({ page }) => {
-  await page.goto("/");
+  await createNotebook(page);
   await expect(page.locator("#offline-status")).toHaveText("Ready offline on this device.", { timeout: 90_000 });
   const pagesBefore = await savedPageRecords(page);
   const removed = await page.evaluate(async () => {
@@ -239,7 +307,7 @@ test("missing hashed bundle chunk is not masked by another cache and can be repa
   });
   expect(removed).toMatch(/\.woff2$/);
 
-  await page.reload();
+  await reloadNotebook(page);
   await expect(page.locator("#offline-status")).toContainText("Offline setup is incomplete");
   await page.route(/\.woff2\?repair=/, (route) => route.abort());
   await page.locator("#retry-offline").click();
@@ -261,10 +329,10 @@ test("missing hashed bundle chunk is not masked by another cache and can be repa
 });
 
 test("offline ink, correction, edit, page switch, and reload persist (not OCR accuracy)", async ({ page, context }) => {
-  await page.goto("/");
+  await createNotebook(page);
   await expect(page.locator("#offline-status")).toHaveText("Ready offline on this device.", { timeout: 90_000 });
   await context.setOffline(true);
-  await page.reload();
+  await reloadNotebook(page);
   await expect(page.locator("#recognition-status")).toContainText("Recognition ready");
 
   const equation: Array<Array<[number, number]>> = [
@@ -278,10 +346,10 @@ test("offline ink, correction, edit, page switch, and reload persist (not OCR ac
     [[265, 179], [295, 179]],
   ];
   for (const path of equation) await drawPath(page, path);
-  await page.getByRole("button", { name: "Readback" }).click();
+  await openReadback(page);
   await expect(page.locator(".line-choice")).toHaveCount(1);
   await expect(page.locator(".line-choice small")).toHaveText(
-    /^(Review read|Finish with =|Needs review)$/,
+    /^(Review read|No final = read|No text recognized|Needs review)$/,
     { timeout: 60_000 },
   );
   await page.locator("#correction-input").fill("11+11=");
@@ -289,32 +357,41 @@ test("offline ink, correction, edit, page switch, and reload persist (not OCR ac
   await expect(page.locator("#line-result")).toContainText("22");
   await expect(page.locator("#save-status")).toHaveText("Saved on this device");
 
+  await page.locator("#close-readback").click();
   await drawPath(page, [[241, 190], [258, 190]]);
+  await openReadback(page);
   await expect(page.locator("#line-result")).not.toContainText("corrected");
   await page.locator("#correction-input").fill("11+12=");
   await page.getByRole("button", { name: "Use correction" }).click();
   await expect(page.locator("#line-result")).toContainText("23");
   await expect(page.locator("#save-status")).toHaveText("Saved on this device");
 
+  await page.locator("#close-readback").click();
   await page.getByRole("button", { name: /Pages/ }).click();
-  await page.getByRole("button", { name: "New page" }).click();
+  await page.locator("#new-page").click();
+  await expect(page.locator("#drawing-surface")).toHaveCSS("pointer-events", "auto");
   await drawPath(page, [[110, 150], [145, 180]]);
+  await openReadback(page);
   await expect(page.locator(".line-choice")).toHaveCount(1);
   await page.locator("#correction-input").fill("2+3=");
   await page.getByRole("button", { name: "Use correction" }).click();
   await expect(page.locator("#line-result")).toContainText("5");
   await expect(page.locator("#save-status")).toHaveText("Saved on this device");
 
+  await page.locator("#close-readback").click();
   await page.getByRole("button", { name: /Pages/ }).click();
   await expect(page.locator(".page-row")).toHaveCount(2);
   await page.locator('.page-row[data-active="false"] .page-switch').click();
+  await openReadback(page);
   await expect(page.locator("#line-result")).toContainText("23");
-  await page.reload();
+  await reloadNotebook(page);
   await expect(page.locator("#offline-status")).toContainText("Offline; app assets installed");
-  await page.getByRole("button", { name: "Readback" }).click();
+  await openReadback(page);
   await expect(page.locator("#line-result")).toContainText("23");
+  await page.locator("#close-readback").click();
   await page.getByRole("button", { name: /Pages/ }).click();
   await page.locator('.page-row[data-active="false"] .page-switch').click();
+  await openReadback(page);
   await expect(page.locator("#line-result")).toContainText("5");
 
   const records = JSON.parse(await savedPageRecords(page)) as Array<{
@@ -329,10 +406,10 @@ test("offline ink, correction, edit, page switch, and reload persist (not OCR ac
 
 test("opt-in sample export preserves the first automatic read after correction", async ({ page }) => {
   test.setTimeout(120_000);
-  await page.goto("/");
+  await createNotebook(page);
   await expect(page.locator("#recognition-status")).toHaveText("Recognition ready", { timeout: 90_000 });
   await drawPath(page, [[120, 140], [156, 168]]);
-  await page.getByRole("button", { name: "Readback" }).click();
+  await openReadback(page);
   await expect(page.locator("#export-sample")).toBeVisible({ timeout: 60_000 });
 
   page.on("dialog", async (dialog) => {
@@ -351,7 +428,7 @@ test("opt-in sample export preserves the first automatic read after correction",
   expect(first).toMatchObject({
     schemaVersion: 1,
     intendedExpression: "11+11=",
-    model: { id: "PP-OCRv6_tiny_det+rec", decoder: "ctc-mask-v1" },
+    model: { id: "PP-OCRv6_tiny_det+rec", decoder: "ctc-mask-v2" },
   });
   expect(first.strokes).toBeInstanceOf(Array);
   expect((first.strokes as unknown[]).length).toBeGreaterThan(0);

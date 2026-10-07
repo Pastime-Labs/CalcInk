@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createNotebook, reloadNotebook } from "./notebook";
 
 test("retry recovers a rejected first service-worker registration", async ({ page, context }) => {
   test.setTimeout(120_000);
@@ -17,7 +18,7 @@ test("retry recovers a rejected first service-worker registration", async ({ pag
     });
   });
 
-  await page.goto("/");
+  await createNotebook(page);
   await expect(page.locator("#offline-status")).toContainText("Offline setup failed");
   await expect(page.locator("#retry-offline")).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem("calcink-test-register-rejected")))
@@ -34,9 +35,27 @@ test("retry recovers a rejected first service-worker registration", async ({ pag
   ))).toBe(true);
 
   await context.setOffline(true);
-  await page.reload();
+  await reloadNotebook(page);
   await expect(page.locator("#offline-status")).toContainText("Offline; app assets installed");
   await expect(page.locator("#recognition-status")).toHaveText("Recognition ready", {
     timeout: 60_000,
   });
+});
+
+test("registration error does not hide a complete installed offline cache", async ({ page, context }) => {
+  await createNotebook(page);
+  await expect(page.locator("#offline-status")).toHaveText("Ready offline on this device.", {
+    timeout: 90_000,
+  });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.serviceWorker, "register", {
+      configurable: true,
+      value: () => Promise.reject(new Error("Simulated registration failure")),
+    });
+  });
+
+  await context.setOffline(true);
+  await reloadNotebook(page);
+  await expect(page.locator("#offline-status")).toContainText("Offline; app assets installed");
+  await expect(page.locator("#retry-offline")).toBeHidden();
 });

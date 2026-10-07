@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createNotebook } from "./notebook";
 
 test.use({ serviceWorkers: "block" });
 
@@ -15,7 +16,7 @@ test("production OCR uses only local app, model, and runtime assets", async ({ p
     });
   });
 
-  await page.goto("/");
+  await createNotebook(page);
   const localOrigin = new URL(page.url()).origin;
   await expect(page.locator("#recognition-status")).toHaveText("Recognition ready", {
     timeout: 90_000,
@@ -28,7 +29,8 @@ test("production OCR uses only local app, model, and runtime assets", async ({ p
   await page.mouse.down();
   await page.mouse.move(bounds.x + 156, bounds.y + 168, { steps: 6 });
   await page.mouse.up();
-  await page.getByRole("button", { name: "Readback" }).click();
+  await page.locator("#more-button").click();
+  await page.locator("#readback-button").click();
   await expect(page.locator("#export-sample")).toBeVisible({ timeout: 60_000 });
   await expect(page.locator("#recognition-status")).toHaveText("Recognition ready");
 

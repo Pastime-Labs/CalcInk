@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { createNotebook, reloadNotebook } from "./notebook";
 
 test("keyboard navigation restores focus and keeps correction errors at the field", async ({ page }) => {
-  await page.goto("/");
+  await createNotebook(page);
   await expect(page.locator("#save-status")).toHaveText("Saved on this device");
 
   // Ink authorship is pointer-only in V1; seed a line so the keyboard form is available.
@@ -27,9 +28,11 @@ test("keyboard navigation restores focus and keeps correction errors at the fiel
       transaction.onerror = () => { db.close(); reject(transaction.error); };
     };
   }));
-  await page.reload();
+  await reloadNotebook(page);
   await expect(page.locator("#pages-button")).toBeEnabled();
 
+  await page.locator("#home-button").focus();
+  await expect(page.locator("#home-button")).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.locator("#pages-button")).toBeFocused();
   await page.keyboard.press("Enter");
@@ -44,6 +47,12 @@ test("keyboard navigation restores focus and keeps correction errors at the fiel
   await expect(page.locator("#pages-button")).toBeFocused();
 
   await page.keyboard.press("Tab");
+  await expect(page.locator("#clear-button")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.locator("#quick-new-page")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.locator("#more-button")).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(page.locator("#readback-button")).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.locator("#readback-panel")).toBeVisible();
@@ -69,5 +78,5 @@ test("keyboard navigation restores focus and keeps correction errors at the fiel
   await expect(page.locator("#close-readback")).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.locator("#readback-panel")).toBeHidden();
-  await expect(page.locator("#readback-button")).toBeFocused();
+  await expect(page.locator("#more-button")).toBeFocused();
 });

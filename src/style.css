@@ -1,3 +1,4 @@
-@import "@fontsource-variable/ibm-plex-sans";
-@import "@fontsource-variable/newsreader";
-@import "./ui/shell.css";
+@import "tailwindcss";
+@import "@fontsource-variable/dm-sans";
+@import "@fontsource-variable/caveat";
+@import "./ui/figma-shell.css";
