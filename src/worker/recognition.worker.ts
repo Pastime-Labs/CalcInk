@@ -8,6 +8,7 @@ import type {
 } from "./protocol";
 
 const MODEL_ID = "PP-OCRv6_tiny_det+rec";
+const DECODER_ID = "ctc-mask-v1";
 const MODEL_ROOT = `${import.meta.env.BASE_URL}models/paddle/`;
 const ORT_ROOT = `${import.meta.env.BASE_URL}paddle-ort/`;
 const scope = self as DedicatedWorkerGlobalScope;
@@ -57,7 +58,13 @@ async function initialize(requestId: number): Promise<void> {
   const start = performance.now();
   try {
     await getModel();
-    post({ type: "ready", requestId, modelId: MODEL_ID, elapsedMs: performance.now() - start });
+    post({
+      type: "ready",
+      requestId,
+      modelId: MODEL_ID,
+      decoderId: DECODER_ID,
+      elapsedMs: performance.now() - start,
+    });
   } catch (error) {
     console.error("CalcInk model initialization failed", error);
     post({ type: "init_error", requestId, code: "model_load_failed", elapsedMs: performance.now() - start });
@@ -77,11 +84,24 @@ async function recognize(request: RecognizeRequest): Promise<void> {
     const [result] = await ocr.predict(image);
     if (cancelled.has(request.requestId)) return;
     if (!result) throw new Error("OCR returned no result");
-    const boxes = result.items.map(({ text, score }) => ({ text, score }));
+    const boxes = result.items.map((item) => {
+      const masked = item as typeof item & { unmaskedText?: string; unmaskedScore?: number };
+      if (typeof masked.unmaskedText !== "string" ||
+          !Number.isFinite(masked.unmaskedScore)) {
+        throw new Error("PaddleOCR CTC mask is unavailable");
+      }
+      return {
+        text: item.text,
+        score: item.score,
+        unmaskedText: masked.unmaskedText,
+        unmaskedScore: masked.unmaskedScore,
+      };
+    });
     post({
       type: "result",
       ...identity(request),
       rawText: boxes.map((box) => box.text).join(""),
+      unmaskedRawText: boxes.map((box) => box.unmaskedText).join(""),
       boxes,
       detMs: result.metrics.detMs,
       recMs: result.metrics.recMs,

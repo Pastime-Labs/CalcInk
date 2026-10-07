@@ -15,6 +15,7 @@ export type LineView = {
   line: EquationLine;
   phase: LinePhase;
   rawRead: string;
+  unmaskedRawRead: string;
   normalizedRead: string;
   result: EquationResult | null;
   source: "automatic" | "corrected" | null;
@@ -31,10 +32,17 @@ export type CorrectionGuard = {
 type FirstRead = {
   strokes: Stroke[];
   modelId: string;
+  decoderId: string | null;
   rawText: string;
+  unmaskedRawText?: string;
   normalizedText: string | null;
   result: EquationResult | null;
-  boxes: Array<{ text: string; score: number }>;
+  boxes: Array<{
+    text: string;
+    score: number;
+    unmaskedText?: string;
+    unmaskedScore?: number;
+  }>;
   detMs: number;
   recMs: number;
   elapsedMs: number;
@@ -54,9 +62,10 @@ export type DiagnosticSample = {
   sampleId: string;
   intendedExpression: string;
   strokes: Stroke[];
-  firstRead: Omit<FirstRead, "strokes" | "modelId">;
+  firstRead: Omit<FirstRead, "strokes" | "modelId" | "decoderId">;
   model: {
     id: string;
+    decoder: string | null;
     detector: { id: string; archiveSha256: string } | null;
     recognizer: { id: string; archiveSha256: string } | null;
   };
@@ -90,7 +99,8 @@ function corrected(line: EquationLine, text: string): LineView | null {
   return {
     line,
     phase: "complete",
-    rawRead: text,
+    rawRead: "",
+    unmaskedRawRead: "",
     normalizedRead: normalized.text,
     result,
     source: "corrected",
@@ -103,6 +113,7 @@ function queued(line: EquationLine): LineView {
     line,
     phase: "queued",
     rawRead: "",
+    unmaskedRawRead: "",
     normalizedRead: "",
     result: null,
     source: null,
@@ -123,7 +134,9 @@ export class EquationController {
   private lineViews: LineView[] = [];
   private correctionMap: Record<string, string> = {};
   private firstReads = new Map<string, FirstRead>();
+  private failedFirstReads = new Set<string>();
   private modelId = "";
+  private decoderId: string | null = null;
   private modelStatus: RecognitionStatus = "loading";
 
   constructor(
@@ -162,7 +175,10 @@ export class EquationController {
   setPage(page: Page, corrections: Record<string, string>): void {
     this.cancelActive();
     this.clearTimer();
-    if (page.id !== this.pageId) this.firstReads.clear();
+    if (page.id !== this.pageId) {
+      this.firstReads.clear();
+      this.failedFirstReads.clear();
+    }
     this.pageId = page.id;
     this.revision += 1;
     this.preferredSignature = null;
@@ -173,6 +189,9 @@ export class EquationController {
     const signatures = new Set(this.lineViews.map((view) => view.line.signature));
     for (const signature of this.firstReads.keys()) {
       if (!signatures.has(signature)) this.firstReads.delete(signature);
+    }
+    for (const signature of this.failedFirstReads) {
+      if (!signatures.has(signature)) this.failedFirstReads.delete(signature);
     }
     this.schedule(0);
     this.onChange();
@@ -188,6 +207,9 @@ export class EquationController {
     const validSignatures = new Set(next.map((line) => line.signature));
     for (const signature of this.firstReads.keys()) {
       if (!validSignatures.has(signature)) this.firstReads.delete(signature);
+    }
+    for (const signature of this.failedFirstReads) {
+      if (!validSignatures.has(signature)) this.failedFirstReads.delete(signature);
     }
     let correctionsChanged = false;
     for (const signature of Object.keys(this.correctionMap)) {
@@ -247,6 +269,7 @@ export class EquationController {
       strokes: cloneStrokes(first.strokes),
       firstRead: {
         rawText: first.rawText,
+        unmaskedRawText: first.unmaskedRawText,
         normalizedText: first.normalizedText,
         result: first.result ? { ...first.result } : null,
         boxes: first.boxes.map((box) => ({ ...box })),
@@ -257,6 +280,7 @@ export class EquationController {
       },
       model: {
         id: first.modelId,
+        decoder: first.decoderId,
         detector: pinned ? { ...PINNED_DETECTOR } : null,
         recognizer: pinned ? { ...PINNED_RECOGNIZER } : null,
       },
@@ -285,7 +309,6 @@ export class EquationController {
         ? {
             ...item,
             phase: "complete",
-            rawRead: normalized.text,
             normalizedRead: normalized.text,
             result,
             source: "corrected",
@@ -302,6 +325,11 @@ export class EquationController {
   retry(): void {
     this.cancelActive();
     this.clearTimer();
+    for (const view of this.lineViews) {
+      if (!this.firstReads.has(view.line.signature)) {
+        this.failedFirstReads.add(view.line.signature);
+      }
+    }
     this.worker?.terminate();
     this.worker = null;
     this.modelStatus = "loading";
@@ -396,13 +424,21 @@ export class EquationController {
     if (response.type === "ready" || response.type === "init_error") {
       if (response.requestId !== this.initId) return;
       this.modelStatus = response.type === "ready" ? "ready" : "unavailable";
-      if (response.type === "ready") this.modelId = response.modelId;
+      if (response.type === "ready") {
+        this.modelId = response.modelId;
+        this.decoderId = response.decoderId ?? null;
+      }
       if (response.type === "init_error") {
         this.lineViews = this.lineViews.map((view) =>
           view.phase === "queued"
             ? { ...view, phase: "unreadable", message: "Recognition is unavailable. Retry to load it." }
             : view,
         );
+        for (const view of this.lineViews) {
+          if (!this.firstReads.has(view.line.signature)) {
+            this.failedFirstReads.add(view.line.signature);
+          }
+        }
       }
       this.onChange();
       this.pump();
@@ -422,6 +458,7 @@ export class EquationController {
     const view = this.lineViews.find((item) => item.line.lineId === response.lineId);
     if (!view || view.phase !== "reading") return;
     if (response.type === "error") {
+      this.failedFirstReads.add(view.line.signature);
       view.phase = "unreadable";
       view.message = response.code === "invalid_ink"
         ? "This line is too large or could not be prepared."
@@ -436,8 +473,14 @@ export class EquationController {
       }
     } else {
       view.rawRead = response.rawText;
+      view.unmaskedRawRead = response.unmaskedRawText ?? "";
+      const omittedBox = response.boxes.some((box) =>
+        !box.text.trim() && !!box.unmaskedText?.trim());
       const normalized = normalizeRead(response.rawText);
-      if (normalized.kind !== "canonical") {
+      if (omittedBox) {
+        view.phase = "unreadable";
+        view.message = "Restricted OCR omitted part of this line. Correct it in Readback.";
+      } else if (normalized.kind !== "canonical") {
         view.phase = "unreadable";
         view.message = normalized.message;
       } else {
@@ -449,16 +492,23 @@ export class EquationController {
           const result = evaluate(normalized.text);
           view.result = result;
           view.phase = result.kind === "syntax" ? "unreadable" : "complete";
-          view.message = result.kind === "syntax" ? result.message : "";
+          const maskChanged = response.unmaskedRawText !== undefined &&
+            response.unmaskedRawText !== response.rawText;
+          view.message = result.kind === "syntax"
+            ? result.message
+            : maskChanged ? "Restricted OCR changed the model read. Verify this answer." : "";
           view.source = "automatic";
         }
       }
-      if (!this.firstReads.has(view.line.signature)) {
+      if (!this.firstReads.has(view.line.signature) &&
+          !this.failedFirstReads.has(view.line.signature)) {
         this.firstReads.set(view.line.signature, {
           strokes: cloneStrokes(view.line.strokes),
           modelId: this.modelId,
+          decoderId: this.decoderId,
           rawText: response.rawText,
-          normalizedText: normalized.kind === "canonical" ? normalized.text : null,
+          unmaskedRawText: response.unmaskedRawText,
+          normalizedText: !omittedBox && normalized.kind === "canonical" ? normalized.text : null,
           result: view.result ? { ...view.result } : null,
           boxes: response.boxes.map((box) => ({ ...box })),
           detMs: response.detMs,
@@ -473,6 +523,12 @@ export class EquationController {
   }
 
   private failWorker(): void {
+    for (const view of this.lineViews) {
+      if ((view.phase === "reading" || view.phase === "queued") &&
+          !this.firstReads.has(view.line.signature)) {
+        this.failedFirstReads.add(view.line.signature);
+      }
+    }
     this.active = null;
     this.modelStatus = "unavailable";
     this.lineViews = this.lineViews.map((view) =>

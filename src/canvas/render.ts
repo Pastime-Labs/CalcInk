@@ -6,7 +6,7 @@ export type AnswerProjection = {
   lineId: string;
   anchor: Pick<Point, "x" | "y">;
   text: string;
-  source: "automatic" | "corrected" | "attention";
+  source: "automatic" | "corrected" | "masked" | "attention";
 };
 
 type Layers = {
@@ -53,7 +53,9 @@ export function answerFootprint(anchor: Pick<Point, "x" | "y">, textWidth: numbe
 
 export function answerDisplayText(projection: AnswerProjection): string {
   if (projection.source === "attention") return projection.text;
-  return `${projection.text} (${projection.source === "corrected" ? "Corrected" : "Review read"})`;
+  const label = projection.source === "corrected" ? "Corrected"
+    : projection.source === "masked" ? "Verify OCR" : "Review read";
+  return `${projection.text} (${label})`;
 }
 
 export function placeAnswerProjections(
@@ -326,7 +328,7 @@ export class CanvasRenderer {
       context.fillStyle =
         (projection.source === "corrected"
           ? style.getPropertyValue("--corrected-color")
-          : projection.source === "attention"
+          : projection.source === "attention" || projection.source === "masked"
             ? style.getPropertyValue("--danger")
           : style.getPropertyValue("--answer-color")
         ).trim() || "#087e77";

@@ -1,7 +1,8 @@
 # 08. Recognition Evidence
 
-Status: Opt-in first-read export and real-Worker fixture replay are
-implemented locally. The fresh handwriting benchmark is **not executed**
+Status: Opt-in first-read export, real-Worker fixture replay, and a private
+benchmark score helper are implemented locally. The active `ctc-mask-v1`
+decoder is experimental; the fresh handwriting benchmark is **not executed**
 and PP-OCRv6 tiny is **not an accepted release result**.
 The prototype has known first-read failures, including `9=`, `11+11=`,
 `6+3=`, and `9+3=`. A user correction is a safety fallback, not a
@@ -33,21 +34,32 @@ export/import feature. The versioned V1 JSON sample contains:
 | Field | Meaning |
 | --- | --- |
 | `sampleId`, `schemaVersion` | Opaque export identifier and format version. |
-| `intendedExpression`, `firstRead.rawText`, `firstRead.normalizedText` | Ground truth and the **first** automatic transcription before correction/retry. |
-| `firstRead.result`, `firstRead.boxes` | First calculated result, if any, and raw model box texts/scores. |
+| `intendedExpression`, `firstRead.rawText`, `firstRead.unmaskedRawText`, `firstRead.normalizedText` | Ground truth, first restricted read, unrestricted diagnostic read, and normalized restricted read before correction/retry. |
+| `firstRead.result`, `firstRead.boxes` | First calculated result, if any, and per-box restricted/unrestricted texts and scores. |
 | `strokes` | The sampled line's ordered vector strokes only, retained with consent. |
 | `environment` | Browser user agent/language, DPR, online state, and export time. |
-| `model`, `firstRead.raster` | Model IDs, pinned archive hashes, and raster version/size. |
+| `model`, `firstRead.raster` | Model and decoder IDs, pinned archive hashes, and raster version/size. |
 | `firstRead.elapsedMs`, `firstRead.detMs`, `firstRead.recMs` | Worker wall time and detector/recognizer timing. |
 
 The owner records pseudonymous writer/session IDs, input method,
 pen-up-to-result timing, failure class, and notes in the benchmark log;
 these are **not** inferred by the current JSON export. Score the initial
 outcome against `intendedExpression`, not a later correction or replay.
+If first inference fails, a later Retry result cannot be exported as the
+first read; record that attempt as a failure in the private worksheet.
 The runner validates version and ink bounds before invoking the actual
 production Worker. The ordinary saved notebook is not altered by export
 or replay. A real sample may become a retained fixture only with explicit
 permission.
+
+`ctc-mask-v1` chooses among the original CTC model classes before decoding;
+it does not rewrite a wrong character after recognition. Keep the
+unrestricted read visible for diagnosis and score the restricted read
+actually used for the answer. Restriction can also force a plausible but
+wrong arithmetic character. One saved private `4=` export originally
+recorded unrestricted `4二`; a current masked replay of its ink yielded
+unrestricted `二4` and restricted `4`. The missing `=` left the line
+incomplete, so this is **not** a successful fix or an acceptance attempt.
 
 ## Build and decision sequence
 
@@ -64,21 +76,21 @@ permission.
    handwriting with every digit, required operator, decimal and negative
    forms, and the four known failures. Parentheses, powers, and alphabetic
    variables are deferred beyond V1.
-4. Classify every failure by the earliest broken boundary. A correct raw
+4. Classify every failure by the earliest broken boundary. A correct restricted
    read with a wrong answer is a parser defect; a missing or split line is
-   grouping; a wrong raw read with intact grouping is rasterization,
-   detection, or recognition. Record invalid alphabetic/symbol outputs
-   exactly as emitted; never silently map `g` to `9` or strip it to make a
-   valid expression. Save only consented failing fixtures.
+   grouping; a wrong read with intact grouping is rasterization, detection,
+   or decoding. Record both reads exactly as emitted; never silently map
+   `g` to `9` or count a forced valid character without checking ground
+   truth. Save only consented failing fixtures.
 5. Use PaddleOCR as the V1 implementation candidate and retain `htt-mini`
    only as a measured prototype baseline. Change one variable at a time
    (grouping, rasterization, box ordering, model, or notation-only
    normalization) against the fixed development set. Record accuracy and
    named-device latency; do not present repeated inference on the same
    strokes as new handwriting samples.
-6. Freeze code, both Paddle model hashes, dictionary, rasterization,
-   normalization, and benchmark protocol before gathering **fresh
-   acceptance ink**. Acceptance samples are not tuning data. Any
+6. Freeze code, both Paddle model hashes, decoder patch, dictionary,
+   rasterization, normalization, and benchmark protocol before gathering
+   **fresh acceptance ink**. Acceptance samples are not tuning data. Any
    post-freeze change requires fresh attempts for the affected gate.
 
 ## Acceptance protocol
@@ -86,8 +98,9 @@ permission.
 The canonical arithmetic-only expression matrix, sample counts, and **all
 numeric release thresholds** live in
 [`docs/RECOGNITION-BENCHMARK.md`](../RECOGNITION-BENCHMARK.md). Score the
-first automatic read and first result before correction. Retain the
-untouched model read and apply only documented notation normalization:
+first restricted automatic read and first result before correction. Retain
+the unrestricted model read as diagnostic evidence and apply only
+documented notation normalization:
 remove spacing and map `×`/`÷`/Unicode `−` to canonical `*`/`/`/`-`.
 The handwriting scope is digits `0`-`9`, `+`, `-`, `×`, `÷`, `.`, and
 terminal `=`. After normalization, validate only canonical digits, `+`,

@@ -93,15 +93,16 @@ export function mountShell(root: HTMLElement) {
           <p class="panel-intro">Check what CalcInk read. If a digit is wrong, correct the text here without changing your ink.</p>
           <div id="line-list" class="line-list" aria-label="Equation lines"></div>
           <div id="line-detail" class="line-detail" hidden>
-            <p class="detail-label">Raw model read</p>
+            <p class="detail-label">Restricted OCR read</p>
             <p id="raw-read" class="read-value"></p>
+            <p id="unmasked-read" class="read-value" hidden></p>
             <p class="detail-label">Interpreted equation</p>
             <p id="normalized-read" class="read-value"></p>
             <p id="line-result" class="result-value"></p>
             <p id="line-message" class="line-message"></p>
             <form id="correction-form">
               <label for="correction-input">Correct the equation</label>
-              <input id="correction-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" maxlength="512" placeholder="11+11=">
+              <input id="correction-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" maxlength="512" placeholder="11+11=" aria-describedby="correction-error">
               <p id="correction-error" class="field-error" role="alert" hidden></p>
               <button class="button button-strong" type="submit">Use correction</button>
             </form>
@@ -132,6 +133,7 @@ export function mountShell(root: HTMLElement) {
           <button id="confirm-delete" class="button button-danger" type="button">Delete page</button>
         </div>
       </dialog>
+      <div id="system-announcement" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
       <div id="live-region" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
     </div>
   `;
@@ -172,6 +174,7 @@ export function mountShell(root: HTMLElement) {
     lineList: element<HTMLElement>(root, "#line-list"),
     lineDetail: element<HTMLElement>(root, "#line-detail"),
     rawRead: element<HTMLElement>(root, "#raw-read"),
+    unmaskedRead: element<HTMLElement>(root, "#unmasked-read"),
     normalizedRead: element<HTMLElement>(root, "#normalized-read"),
     lineResult: element<HTMLElement>(root, "#line-result"),
     lineMessage: element<HTMLElement>(root, "#line-message"),
@@ -189,6 +192,7 @@ export function mountShell(root: HTMLElement) {
     deleteMessage: element<HTMLElement>(root, "#delete-message"),
     cancelDelete: element<HTMLButtonElement>(root, "#cancel-delete"),
     confirmDelete: element<HTMLButtonElement>(root, "#confirm-delete"),
+    systemAnnouncement: element<HTMLElement>(root, "#system-announcement"),
     liveRegion: element<HTMLElement>(root, "#live-region"),
   };
 }

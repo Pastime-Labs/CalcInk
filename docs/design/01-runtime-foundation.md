@@ -1,7 +1,9 @@
 # 01. Runtime Foundation
 
-Status: Implemented locally in Phase 1; clean-checkout download and hosted CI
-remain unverified. The prototype is reference only.
+Status: Implemented locally in Phase 1; an isolated clone of the tree now
+at `6b5d54b` downloaded assets and passed install/build/tests on Windows.
+The final public checkout and hosted CI remain unverified. The prototype
+is reference only.
 
 ## Purpose and boundary
 

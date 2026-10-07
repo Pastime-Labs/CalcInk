@@ -2,20 +2,21 @@
 
 Status: Implemented locally in Phase 3; **not yet an accepted release model**.
 PP-OCRv6 tiny detection plus recognition via `@paddleocr/paddleocr-js`
-is the chosen V1 path. `htt-mini` remains a prototype comparison
-baseline, not the production fallback.
+is the chosen V1 path. The active `ctc-mask-v1` decoder is an experiment,
+not a demonstrated accuracy improvement. `htt-mini` remains a prototype
+comparison baseline, not the production fallback.
 
 ## Purpose and ownership
 
 Implements master requirement **P-04**. Load locally bundled PaddleOCR
 detector and recognizer assets with their original dictionary and
-worker-backed browser/ONNX runtime, infer the **raw** transcription of one
-rasterized equation line, and return timing. The inference adapter does not
-normalize arithmetic, calculate answers, project UI, save ink, or call an
-online API. V1 rasterizes in its dedicated application Worker, then uses
-the SDK's nested Worker for inference because the SDK's direct path
-requires DOM canvas access. Drawing responsiveness still needs phone
-measurement.
+worker-backed browser/ONNX runtime, infer restricted and unrestricted
+transcriptions of one rasterized equation line, and return timing. The
+inference adapter does not normalize arithmetic, calculate answers,
+project UI, save ink, or call an online API. V1 rasterizes in its dedicated
+application Worker, then uses the SDK's nested Worker for inference because
+the SDK's direct path requires DOM canvas access. Drawing responsiveness
+still needs phone measurement.
 See [preprocessing](09-ml-preprocessing.md), [orchestration](07-equation-orchestration.md),
 and [evidence](08-recognition-evidence.md).
 
@@ -30,6 +31,32 @@ establishes asset provenance, not handwriting accuracy or legal sign-off.
 Before public distribution, include the applicable third-party license
 texts and notices for the models, SDK, and runtime, then record the owner's
 redistribution decision. Model archives remain Git-ignored until then.
+
+## Experimental CTC decoder
+
+`scripts/patch-paddle-decoder.mjs` patches the pinned PaddleOCR.js 0.4.2
+nested Worker during `npm ci`; development and build verify the patch.
+It preserves the original dictionary and class indices, including CTC
+blank, but limits the winning class to digits, arithmetic operators,
+decimal point, `=`, supported operator variants, and space. In the same
+pass it keeps the unrestricted decode and per-box scores for comparison.
+This is not a vocabulary replacement, model retraining, or a guarantee
+that a constrained read is correct.
+
+The application evaluates only the restricted read and shows the
+unrestricted read in Readback when it differs. A saved private `4=` export
+originally recorded `4二`; a current masked replay of the same ink yielded
+restricted `4`, unrestricted `二4`, and no answer. This demonstrates
+non-answering for that sample, **not** recognition improvement. A mask can
+turn an obvious unsupported read into a plausible wrong expression, so fresh
+handwriting and answer checks remain mandatory. SDK changes must fail the
+pinned byte-for-byte patch check rather than silently ship an unmasked Worker.
+If masking leaves a detected box empty or space-only while its
+unrestricted read has substantive text, the line is unreadable instead
+of joining the remaining boxes into an answer. The diagnostic still
+retains both box reads.
+An older service worker can still serve baseline code until the update is
+accepted and the page reloads; verify `model.decoder` in each export.
 
 ## Worker contract
 
@@ -57,6 +84,7 @@ type Ready = {
   type: "ready";
   requestId: number;
   modelId: string;
+  decoderId?: string;
   elapsedMs: number;
 };
 type InitFailure = {
@@ -72,7 +100,13 @@ type Result = {
   lineId: string;
   canvasRevisionId: number;
   rawText: string;
-  boxes: Array<{ text: string; score: number }>;
+  unmaskedRawText?: string;
+  boxes: Array<{
+    text: string;
+    score: number;
+    unmaskedText?: string;
+    unmaskedScore?: number;
+  }>;
   detMs: number;
   recMs: number;
   elapsedMs: number;
@@ -121,18 +155,20 @@ pen-up-to-settled-result separately.
    and give the UI a retryable error if loading fails.
 4. Pass the validated [line raster](09-ml-preprocessing.md) to the SDK's
    worker-backed detection-plus-recognition call. Preserve individual
-   detected box texts/scores and their order; assemble the line read
-   deterministically and test multi-box cases. Do not silently discard a
-   box, invent a digit, or substitute an unsupported symbol. Cleanly close
-   sessions on replacement and allow retry after a failed load or inference.
-5. Return the unmodified raw transcription and detection/recognition timing.
+   restricted and unrestricted box texts/scores and their order; assemble
+   both line reads deterministically and test multi-box cases. Do not
+   silently discard a box or substitute a character after decoding. Cleanly
+   close sessions on replacement and allow retry after a failed load or
+   inference.
+5. Return the restricted transcription used for answers, the untouched
+   unrestricted diagnostic transcription, and detection/recognition timing.
    Notation normalization, V1 arithmetic grammar validation, and manual
    correction happen outside the adapter. Handwriting scope is digits
    `0`-`9`, `+`, `-`, `×`, `÷`, `.`, and terminal `=`; normalization may remove
    spacing and map `×`/`÷`/Unicode `−` to internal `*`/`/`/`-`.
    Parentheses, powers, and variables are V2.
-   Paddle's pretrained output dictionary stays intact: an alphabetic raw
-   read is retained and rejected, **not** deleted or mapped to a digit.
+   Paddle's pretrained output dictionary stays intact: an alphabetic
+   unrestricted read is retained for diagnosis, **not** mapped to a digit.
    Old HTT-specific LaTeX words such as `\times` are not V1 Paddle aliases.
    Replacing the dictionary without retraining or a decoder that preserves
    model class indices is unsafe.

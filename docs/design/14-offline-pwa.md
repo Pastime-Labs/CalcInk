@@ -7,6 +7,9 @@ settlement, correction, edit, page switch, and reload while offline; real
 handwriting and physical-phone acceptance remain open. The `htt-mini`
 notebook and on-demand Paddle comparison lab are prototype behavior, not
 V1 evidence.
+An isolated browser regression also rejects the first service-worker
+registration once, then verifies that Retry installs the full app and
+supports an offline model reload.
 
 ## User contract
 

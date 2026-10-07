@@ -54,6 +54,18 @@ export function registerOfflineApp(onStatus: (status: OfflineStatus) => void): O
         message: "Retrying the offline asset install.",
       });
       try {
+        if (!(await navigator.serviceWorker.getRegistration(baseUrl.href))?.active) {
+          registration = await navigator.serviceWorker.register(new URL("sw.js", baseUrl), {
+            scope: baseUrl.href,
+          });
+          observeInstall(registration.installing ?? registration.waiting);
+          if (!registration.active) {
+            if (!registration.installing && !registration.waiting) {
+              throw new Error("No service worker is installing");
+            }
+            return;
+          }
+        }
         const cache = await openPrecache(baseUrl);
         const keys = await cache.keys();
         for (const asset of await requiredOfflineAssets(cache, baseUrl)) {
@@ -103,7 +115,9 @@ export function registerOfflineApp(onStatus: (status: OfflineStatus) => void): O
   const verifyReady = async (failureOnMissing: boolean) => {
     let complete = false;
     try {
-      complete = await hasCompleteOfflineCache(await openPrecache(baseUrl), baseUrl);
+      if ((await navigator.serviceWorker.getRegistration(baseUrl.href))?.active) {
+        complete = await hasCompleteOfflineCache(await openPrecache(baseUrl), baseUrl);
+      }
     } catch {
       // A missing or inaccessible precache is not proof of offline readiness.
     }
@@ -119,7 +133,7 @@ export function registerOfflineApp(onStatus: (status: OfflineStatus) => void): O
   };
   const observeInstall = (worker: ServiceWorker | null) => {
     if (!worker) return;
-    worker.addEventListener("statechange", () => {
+    const checkState = () => {
       if (worker.state === "activated") void verifyReady(true);
       if (worker.state === "redundant" && !registration?.active &&
           status.kind === "downloading") {
@@ -128,7 +142,9 @@ export function registerOfflineApp(onStatus: (status: OfflineStatus) => void): O
           message: "Offline assets could not be installed. Drawing remains available.",
         });
       }
-    });
+    };
+    worker.addEventListener("statechange", checkState);
+    checkState();
   };
 
   const updateSW = registerSW({
