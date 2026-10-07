@@ -796,7 +796,8 @@ export class NotebookApp {
         anchor: view.line.anchor,
         inkHeight: view.line.bounds.bottom - view.line.bounds.top,
         text: resultText(view.result),
-        source: view.source ?? "automatic",
+        source: view.source === "automatic" && view.message
+          ? "masked" : view.source ?? "automatic",
       }];
     });
     this.conflicts = this.renderer.setAnswers(projections);

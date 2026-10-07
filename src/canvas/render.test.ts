@@ -83,6 +83,8 @@ describe("DPR-safe canvas projection", () => {
 
   it("spells out answer provenance and unreadable state without relying on color", () => {
     expect(answerDisplayText(answer("one", 100))).toBe("42 (Review read)");
+    expect(answerDisplayText({ ...answer("one", 100), source: "masked" }))
+      .toBe("42 (Verify OCR)");
     expect(answerDisplayText({ ...answer("one", 100), source: "corrected" }))
       .toBe("42 (Corrected)");
     expect(answerDisplayText({

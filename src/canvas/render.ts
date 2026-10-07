@@ -8,7 +8,7 @@ export type AnswerProjection = {
   anchor: Pick<Point, "x" | "y">;
   inkHeight?: number;
   text: string;
-  source: "automatic" | "corrected" | "attention";
+  source: "automatic" | "corrected" | "masked" | "attention";
 };
 
 export type CanvasCamera = { x: number; y: number; scale: number };
@@ -81,6 +81,7 @@ export function answerFootprint(
 
 function answerLabel(projection: AnswerProjection): string {
   if (projection.source === "attention") return "";
+  if (projection.source === "masked") return "(Verify OCR)";
   return projection.source === "corrected" ? "(Corrected)" : "(Review read)";
 }
 
@@ -489,7 +490,7 @@ export class CanvasRenderer {
       context.fillStyle =
         (projection.source === "corrected"
           ? style.getPropertyValue("--corrected-color")
-          : projection.source === "attention"
+          : projection.source === "attention" || projection.source === "masked"
             ? style.getPropertyValue("--danger")
           : style.getPropertyValue("--answer-color")
         ).trim() || "#087e77";

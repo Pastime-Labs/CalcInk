@@ -58,6 +58,16 @@ test("draw, correct, save, and reload a local equation", async ({ page }) => {
 
 test("settled lines announce once even when another line is selected", async ({ page }) => {
   await page.addInitScript(() => {
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function(
+      text: string, x: number, y: number, maxWidth?: number,
+    ) {
+      if (this.canvas.id === "answer-canvas" && text === "(Verify OCR)") {
+        this.canvas.dataset.verifyOcr = "true";
+      }
+      if (maxWidth === undefined) fillText.call(this, text, x, y);
+      else fillText.call(this, text, x, y, maxWidth);
+    };
     class TestWorker {
       onmessage: ((event: MessageEvent) => void) | null = null;
       onerror = null;
@@ -110,6 +120,7 @@ test("settled lines announce once even when another line is selected", async ({ 
   await expect(page.locator("#live-region")).toHaveText(
     "Line 1, 1+1=: 2. Review read. Restricted OCR changed the model read. Verify this answer.",
   );
+  await expect(page.locator("#answer-canvas")).toHaveAttribute("data-verify-ocr", "true");
   await drawStroke(page, 120, 360);
   await expect(page.locator("#live-region")).toBeEmpty();
   await expect(page.locator(".line-choice")).toHaveCount(2);
