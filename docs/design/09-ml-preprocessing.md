@@ -67,9 +67,9 @@ creation. The old 12-column HTT feature tensor is not part of V1.
 V1 handwriting supports only digits `0`-`9`, `+`, `-`, `×`, `÷`, `.`, and
 terminal `=`. Notation normalization may map `×`/`÷`/Unicode `−` to
 internal `*`/`/`/`-`. Parentheses, inline or spatial powers, and
-alphabetic variables are deferred to V2. This restriction belongs to
-expression validation, **not** a replacement of PaddleOCR's pretrained
-dictionary or a raster trick that tries to suppress letters.
+alphabetic variables remain outside the approved V2 scope. This
+restriction belongs to expression validation, **not** a replacement of
+PaddleOCR's pretrained dictionary or a raster trick that suppresses letters.
 
 ## Failure and test matrix
 

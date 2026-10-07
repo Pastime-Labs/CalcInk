@@ -1,7 +1,7 @@
 # 08. Recognition Evidence
 
 Status: Opt-in first-read export, real-Worker fixture replay, and a private
-benchmark score helper are implemented locally. The active `ctc-mask-v1`
+benchmark score helper are implemented locally. The active `ctc-mask-v2`
 decoder is experimental; the fresh handwriting benchmark is **not executed**
 and PP-OCRv6 tiny is **not an accepted release result**.
 The prototype has known first-read failures, including `9=`, `11+11=`,
@@ -35,7 +35,8 @@ export/import feature. The versioned V1 JSON sample contains:
 | --- | --- |
 | `sampleId`, `schemaVersion` | Opaque export identifier and format version. |
 | `intendedExpression`, `firstRead.rawText`, `firstRead.unmaskedRawText`, `firstRead.normalizedText` | Ground truth, first restricted read, unrestricted diagnostic read, and normalized restricted read before correction/retry. |
-| `firstRead.result`, `firstRead.boxes` | First calculated result, if any, and per-box restricted/unrestricted texts and scores. |
+| `firstRead.result`, `firstRead.boxes` | First calculated result, if any, and per-box restricted/unrestricted texts, scores, and detector polygons. |
+| `firstRead.detectedBoxes`, `firstRead.recognizedCount` | Detector and recognizer item counts for locating missed marks. |
 | `strokes` | The sampled line's ordered vector strokes only, retained with consent. |
 | `environment` | Browser user agent/language, DPR, online state, and export time. |
 | `model`, `firstRead.raster` | Model and decoder IDs, pinned archive hashes, and raster version/size. |
@@ -45,6 +46,8 @@ The owner records pseudonymous writer/session IDs, input method,
 pen-up-to-result timing, failure class, and notes in the benchmark log;
 these are **not** inferred by the current JSON export. Score the initial
 outcome against `intendedExpression`, not a later correction or replay.
+Diagnostic exports can record an unfinished expression without `=` exactly
+as drawn; acceptance attempts still require a final `=`.
 If first inference fails, a later Retry result cannot be exported as the
 first read; record that attempt as a failure in the private worksheet.
 The runner validates version and ink bounds before invoking the actual
@@ -52,14 +55,17 @@ production Worker. The ordinary saved notebook is not altered by export
 or replay. A real sample may become a retained fixture only with explicit
 permission.
 
-`ctc-mask-v1` chooses among the original CTC model classes before decoding;
-it does not rewrite a wrong character after recognition. Keep the
-unrestricted read visible for diagnosis and score the restricted read
+`ctc-mask-v2` chooses among the original CTC model classes before decoding,
+including `二`, which normalization maps to `=`. It does not rewrite a
+wrong character after recognition. Keep the
+unrestricted read visible for diagnosis (with `二` displayed as `=`);
+exported raw fields retain the original glyph. Score the restricted read
 actually used for the answer. Restriction can also force a plausible but
-wrong arithmetic character. One saved private `4=` export originally
-recorded unrestricted `4二`; a current masked replay of its ink yielded
+wrong arithmetic character; allowing `二` can also create a false `=`.
+One saved private `4=` export originally recorded unrestricted `4二`;
+an earlier `ctc-mask-v1` replay of its ink yielded
 unrestricted `二4` and restricted `4`. The missing `=` left the line
-incomplete, so this is **not** a successful fix or an acceptance attempt.
+incomplete, so this is **not** a successful fix, a v2 result, or an acceptance attempt.
 
 ## Build and decision sequence
 

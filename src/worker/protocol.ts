@@ -49,7 +49,10 @@ export type RecognitionResponse =
         score: number;
         unmaskedText?: string;
         unmaskedScore?: number;
+        poly?: [number, number][];
       }>;
+      detectedBoxes?: number;
+      recognizedCount?: number;
       detMs: number;
       recMs: number;
       elapsedMs: number;

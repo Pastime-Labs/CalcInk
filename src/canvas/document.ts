@@ -1,4 +1,5 @@
-import type { Page, Point, Stroke } from "./types";
+import type { Page, PaperTemplate, Point, Stroke } from "./types";
+import { validInkColor, validStrokeStyle } from "./brush";
 
 type Edit = { index: number; removed: Stroke[]; inserted: Stroke[] };
 type Command = Edit[];
@@ -10,6 +11,8 @@ function cloneStroke(stroke: Stroke): Stroke {
   return {
     id: stroke.id,
     width: stroke.width,
+    ...(stroke.color === undefined ? {} : { color: stroke.color }),
+    ...(stroke.style === undefined ? {} : { style: stroke.style }),
     points: stroke.points.map((point) => ({ ...point })),
   };
 }
@@ -34,6 +37,8 @@ function validateStroke(value: unknown): asserts value is Stroke {
     stroke.id.length === 0 ||
     !Number.isFinite(stroke.width) ||
     stroke.width <= 0 ||
+    (stroke.color !== undefined && !validInkColor(stroke.color)) ||
+    (stroke.style !== undefined && !validStrokeStyle(stroke.style)) ||
     !Array.isArray(stroke.points) ||
     stroke.points.length === 0 ||
     stroke.points.some((point) => !validPoint(point))
@@ -46,7 +51,13 @@ function validatePage(value: unknown): asserts value is Page {
   if (typeof value !== "object" || value === null) throw new TypeError("Invalid page");
   const page = value as Page;
   if (
-    page.schemaVersion !== 2 ||
+    (page.schemaVersion !== 2 && page.schemaVersion !== 3) ||
+    (page.schemaVersion === 3 &&
+      (page.geometry !== "a4" && page.geometry !== "legacy" ||
+       page.template !== "blank" && page.template !== "ruled" &&
+       page.template !== "grid" && page.template !== "dots")) ||
+    (page.schemaVersion === 2 &&
+      (page.geometry !== undefined || page.template !== undefined)) ||
     typeof page.id !== "string" ||
     page.id.length === 0 ||
     typeof page.title !== "string" ||
@@ -282,6 +293,19 @@ function nextTimestamp(previous: number): number {
   return Math.max(Date.now(), previous + 1);
 }
 
+function sameStroke(a: Stroke, b: Stroke): boolean {
+  return a.id === b.id &&
+    a.width === b.width &&
+    a.color === b.color &&
+    a.style === b.style &&
+    a.points.length === b.points.length &&
+    a.points.every((point, index) => {
+      const other = b.points[index];
+      return point.x === other.x && point.y === other.y &&
+        point.pressure === other.pressure && point.t === other.t;
+    });
+}
+
 export class InkDocument {
   private data: Page;
   private done: Command[] = [];
@@ -289,14 +313,7 @@ export class InkDocument {
 
   constructor(page: Page) {
     validatePage(page);
-    this.data = {
-      schemaVersion: 2,
-      id: page.id,
-      title: page.title,
-      createdAt: page.createdAt,
-      updatedAt: page.updatedAt,
-      strokes: page.strokes.map(cloneStroke),
-    };
+    this.data = { ...page, strokes: page.strokes.map(cloneStroke) };
   }
 
   get page(): Page {
@@ -347,7 +364,7 @@ export class InkDocument {
           id = crypto.randomUUID();
         } while (ids.has(id));
         ids.add(id);
-        return { id, width: stroke.width, points };
+        return { ...cloneStroke(stroke), id, points };
       });
       inserted.forEach(validateStroke);
       edits.push({ index, removed: [stroke], inserted });
@@ -358,6 +375,35 @@ export class InkDocument {
   clear(): boolean {
     if (this.data.strokes.length === 0) return false;
     return this.commit([{ index: 0, removed: [...this.data.strokes], inserted: [] }]);
+  }
+
+  replaceSelectedStrokes(
+    selectedIds: ReadonlySet<string>,
+    replacement: readonly Stroke[] | null,
+  ): boolean {
+    if (selectedIds.size === 0) return false;
+    const existing = this.data.strokes.filter((stroke) => selectedIds.has(stroke.id));
+    if (existing.length !== selectedIds.size) throw new RangeError("Selected stroke does not exist");
+    const replacements = new Map<string, Stroke>();
+    if (replacement !== null) {
+      for (const stroke of replacement) {
+        if (!selectedIds.has(stroke.id)) continue;
+        validateStroke(stroke);
+        if (replacements.has(stroke.id)) throw new TypeError("Duplicate replacement stroke ID");
+        replacements.set(stroke.id, cloneStroke(stroke));
+      }
+      if (replacements.size !== selectedIds.size) {
+        throw new RangeError("Missing replacement stroke");
+      }
+    }
+    const edits: Edit[] = [];
+    this.data.strokes.forEach((stroke, index) => {
+      if (!selectedIds.has(stroke.id)) return;
+      const next = replacements.get(stroke.id);
+      if (next && sameStroke(stroke, next)) return;
+      edits.push({ index, removed: [stroke], inserted: next ? [next] : [] });
+    });
+    return this.commit(edits);
   }
 
   undo(): boolean {
@@ -386,6 +432,19 @@ export class InkDocument {
     if (normalized.length > 80) throw new RangeError("Page title is too long");
     if (this.data.title === normalized) return false;
     this.data.title = normalized;
+    this.touchUpdatedAt();
+    return true;
+  }
+
+  setTemplate(template: PaperTemplate): boolean {
+    if (template !== "blank" && template !== "ruled" &&
+        template !== "grid" && template !== "dots") {
+      throw new TypeError("Invalid paper template");
+    }
+    if ((this.data.template ?? "ruled") === template) return false;
+    this.data = this.data.schemaVersion === 2
+      ? { ...this.data, schemaVersion: 3, geometry: "legacy", template }
+      : { ...this.data, template };
     this.touchUpdatedAt();
     return true;
   }

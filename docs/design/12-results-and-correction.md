@@ -29,7 +29,7 @@ current ink on reload. The storage schema and migration are specified in
 | State | Canvas result | Readback panel |
 | --- | --- | --- |
 | Loading/queued/reading | No answer for changed ink; small status only. | "Loading recognition" or "Reading this line". |
-| Incomplete | No number. | Exact available read and "Finish with =". |
+| Incomplete | No number. | Exact available read and notice that no final `=` was recognized. |
 | Valid automatic read | Numeric result, marked "Review read". | Exact raw model read, normalized equation, result, correction action. |
 | Corrected read | Numeric result, visibly marked "Corrected". | User's canonical correction and result. |
 | Division by zero | `Undefined`, not a crash. | Read plus typed reason in plain language. |

@@ -1,6 +1,8 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve, relative, sep } from "node:path";
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 import { REQUIRED_OFFLINE_ASSETS } from "./src/pwa/assets.ts";
 
@@ -8,7 +10,7 @@ const output = resolve("dist");
 
 function requiredEmittedAsset(path: string): boolean {
   return path.startsWith("assets/") &&
-    /\.(?:js|mjs|css|woff2|svg|json|wasm|onnx|tar)$/.test(path) &&
+    /\.(?:js|mjs|css|woff2|svg|png|json|wasm|onnx|tar)$/.test(path) &&
     !/^assets\/ort-wasm-simd-threaded\.jsep-.*\.wasm$/.test(path);
 }
 
@@ -22,6 +24,8 @@ function emittedAssets(directory: string): string[] {
 
 export default defineConfig({
   plugins: [
+    react(),
+    tailwindcss(),
     {
       name: "emit-offline-asset-list",
       apply: "build",
@@ -74,7 +78,7 @@ export default defineConfig({
         icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml" }],
       },
       workbox: {
-        globPatterns: ["**/*.{js,mjs,css,html,woff2,svg,webmanifest,json,wasm,onnx,tar}"],
+        globPatterns: ["**/*.{js,mjs,css,html,woff2,svg,png,webmanifest,json,wasm,onnx,tar}"],
         // Bare model URLs return empty 204 responses in Chrome; use the OCR URLs.
         globIgnores: ["assets/ort-wasm-simd-threaded.jsep-*.wasm", "models/paddle/*.tar"],
         additionalManifestEntries: [

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createNotebook } from "./notebook";
 
 test.use({
   viewport: { width: 390, height: 844 },
@@ -8,21 +9,23 @@ test.use({
 });
 
 test("mobile canvas stays DPR-sized and a cancelled touch does not save ink", async ({ page, context }) => {
-  await page.goto("/");
-  await expect(page.getByRole("button", { name: "Pen" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Stroke erase" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Pixel erase" })).toBeVisible();
+  await createNotebook(page);
+  await expect(page.getByRole("button", { name: "Pen", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Stroke eraser" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pixel eraser" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+  await page.locator("#more-button").click();
+  await expect(page.locator("#pen-only-mode")).not.toBeChecked();
+  await page.locator("#more-button").click();
 
   const dimensions = await page.locator("#drawing-surface").evaluate((surface) => {
     const paper = surface.closest(".paper");
     if (!paper) throw new Error("Paper is missing");
-    const rect = paper.getBoundingClientRect();
     return [...paper.querySelectorAll("canvas")].map((canvas) => ({
       width: canvas.width,
       height: canvas.height,
-      expectedWidth: Math.round(rect.width * devicePixelRatio),
-      expectedHeight: Math.round(rect.height * devicePixelRatio),
+      expectedWidth: Math.round(paper.clientWidth * devicePixelRatio),
+      expectedHeight: Math.round(paper.clientHeight * devicePixelRatio),
     }));
   });
   expect(dimensions).toHaveLength(3);
@@ -47,7 +50,6 @@ test("mobile canvas stays DPR-sized and a cancelled touch does not save ink", as
     touchPoints: [],
   });
   await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
-  await expect(page.locator("#empty-hint")).toBeVisible();
 
   await page.touchscreen.tap(x, y);
   await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();

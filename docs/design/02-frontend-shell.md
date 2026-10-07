@@ -1,37 +1,43 @@
 # 02. Frontend Shell
 
-Status: Functional shell implemented locally in Phases 2-4; final device and
+Status: Functional shell implemented locally in Phases 2-4; Phase 5A
+React/Tailwind migration is in progress. Final visual, device, and
 accessibility acceptance remains open. The prototype is reference only.
 
 Owns the functional interface for requirement P-09. This is a usability and
-accessibility pass, **not** the final visual identity. The later
-[visual-design pass](16-visual-design-pass.md) may change typography, color,
-and ornament without changing the workflows specified here.
+accessibility contract. The [visual-design pass](16-visual-design-pass.md)
+uses the Figma Make export as a visual reference without copying its mock
+notebook logic or V2 controls. React mounts the structural shell once;
+the existing NotebookApp controller owns state and updates stable shell
+elements. The root Vite/PWA app and its ink, OCR, parser, and storage
+modules remain unchanged in purpose.
 
 ## User-facing structure
 
-- Header: CalcInk identity, current page title, Pages control, save state,
-  recognition state, offline state, and Readback control.
+- Header: current page title, Pages control, save state, undo/redo, clear,
+  new page, and a three-dot More control containing Readback. Recognition
+  and offline states remain separately visible below the header.
 - Workspace: scrollable paper, visible ink, inline result layer, an unobtrusive
   first-use hint, and an empty-page state. A user lands here, not on a
   dashboard or blocking onboarding flow.
-- Tool area: pen, whole-stroke eraser, pixel eraser, width control, undo,
-  redo, and undoable clear. Desktop uses a compact side rail. On narrow
-  screens, the same actions live in a bottom dock above the safe area.
+- Tool area: pen, whole-stroke eraser, pixel eraser, and width control in
+  a floating bottom dock; undo/redo and undoable clear are in the header.
+  The dock stays above the phone safe area.
 - Pages panel: a modal native `<dialog>` with a simple list plus create,
   rename, switch, and delete actions. Style it as an overlay on desktop
   and a safe-area-aware sheet on mobile. The page workflow is defined in
   [03. Page Management](03-page-management.md).
-- Readback panel: a non-modal `<aside>` with a DOM representation of the
+- Readback panel: a modal `<dialog>` with a DOM representation of the
   selected equation line, recognized text, correction input, validation
-  message, and result. It must remain usable even if inline canvas text is
-  not readable to assistive technology.
+  message, and result. Close it to resume drawing. It must remain usable
+  even if inline canvas text is not readable to assistive technology.
 
 Use semantic `<button>`, `<input>`, `<label>`, `<nav>`, and `<main>`.
-The Readback trigger exposes `aria-controls` and `aria-expanded`; its panel
-has a visible heading. The drawing surface gets a descriptive accessible
-name and instructions; do not misrepresent a pointer-only drawing action
-as keyboard-operable. Page and correction forms remain keyboard-operable.
+The More and Readback triggers expose `aria-controls` and `aria-expanded`;
+the modal has a visible heading and returns focus to the visible More
+button when closed. The drawing surface gets a descriptive accessible name
+and instructions; do not misrepresent a pointer-only drawing action as
+keyboard-operable. Page and correction forms remain keyboard-operable.
 
 ## Interface state
 
@@ -56,12 +62,13 @@ being reread.
 2. Selecting a tool updates its visible selected state and `aria-pressed`.
    Width changes only future pen strokes. Disabled undo/redo/clear buttons
    have native `disabled` state and an understandable label.
-3. Clear is a single undoable ink command. It should be labeled as clearing
-   the **current page**, not deleting the page. Page deletion has a separate
-   named confirmation.
-4. Opening Pages or Readback puts focus into that panel. Escape or its close
-   control returns focus to the trigger; changing pages closes transient
-   panels and cancels an in-progress pointer gesture.
+3. Clear asks for confirmation, then performs a single undoable ink command.
+   It should be labeled as clearing the **current page**, not deleting the
+   page. Page deletion has a separate named confirmation.
+4. Opening Pages or Readback puts focus into that dialog. Escape or its close
+   control returns focus to the visible opener (More for Readback);
+   changing pages closes transient panels and cancels an in-progress
+   pointer gesture. Drawing resumes only after Readback closes.
 5. Support `P` for pen, `E` for stroke eraser, `Shift+E` for pixel eraser,
    and platform `Ctrl`/`Cmd+Z` and `Ctrl`/`Cmd+Shift+Z` for history. Ignore
    tool shortcuts while an input, textarea, select, editable region, or modal
@@ -75,9 +82,10 @@ being reread.
    Readback actions, or the browser safe area. A long page or many page titles
    must not create horizontal overflow in the shell; paper scrolling is
    separate from shell overflow.
-8. Use local assets and a small set of neutral CSS variables now. Do not
-   finalize a decorative style, animation system, or brand palette here.
-   Respect reduced motion from the start.
+8. Build Tailwind and self-host fonts/icons locally; no Figma mock
+   `localStorage` flow, external font request, colored-ink picker, or other
+   V2 feature ships. Keep status and answer content driven by actual state.
+   Respect reduced motion.
 
 ## Failure and empty states
 

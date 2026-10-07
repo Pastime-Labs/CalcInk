@@ -2,7 +2,7 @@
 
 Status: **planned, not passed**. This protocol tests the rebuilt V1 with
 the selected local PP-OCRv6 tiny detection-plus-recognition pipeline and
-experimental `ctc-mask-v1` decoder through the production UI, line grouping,
+experimental `ctc-mask-v2` decoder through the production UI, line grouping,
 normalization, parser, and result display.
 Fake Worker or parser-only tests cannot supply a handwriting score. See the
 [master design](DESIGN.md) and
@@ -27,9 +27,10 @@ the page bypassed fresh pointer capture. It is **not** a fresh handwriting
 attempt, phone result, latency gate, or release score.
 
 A separate saved private `4=` development export originally recorded
-unrestricted `4二`. A current `ctc-mask-v1` replay of the same ink yielded
+unrestricted `4二`. An earlier `ctc-mask-v1` replay of the same ink yielded
 restricted `4`, unrestricted `二4`, and no answer. This is an incomplete
-read, not a fix, and is not part of the fresh acceptance set.
+historical read, not evidence for `ctc-mask-v2`, and is not part of the
+fresh acceptance set.
 
 ## 1. Two Separate Sets
 
@@ -154,7 +155,7 @@ node scripts/score-benchmark.mjs --template local-assets/benchmark/attempts.json
 ```
 
 `local-assets/` is Git-ignored. Freeze the exact decoder patch along with
-the build; the scorer requires `model.decoder` to match `ctc-mask-v1`.
+the build; the scorer requires `model.decoder` to match `ctc-mask-v2`.
 An older service worker may serve baseline code until its update is
 accepted and the page reloads. Verify this decoder ID in each export
 before recording it. Fill `frozenCommit`, named `device`, `browser`,

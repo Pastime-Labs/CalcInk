@@ -1,7 +1,13 @@
-import type { Point } from "./types";
+import type { Point, Stroke } from "./types";
 
-export type Tool = "pen" | "stroke-eraser" | "pixel-eraser";
-export type FinishedGesture = { tool: Tool; width: number; points: Point[] };
+export type Tool = "pen" | "pencil" | "stroke-eraser" | "pixel-eraser" | "lasso";
+export type FinishedGesture = {
+  tool: Tool;
+  width: number;
+  points: Point[];
+  color?: Stroke["color"];
+  style?: Stroke["style"];
+};
 
 type ActiveGesture = {
   pointerId: number;
@@ -9,12 +15,23 @@ type ActiveGesture = {
   lastClient: { x: number; y: number };
   tool: Tool;
   width: number;
+  color?: Stroke["color"];
+  style?: Stroke["style"];
   startStamp: number;
   startTime: number;
   points: Point[];
 };
 
-type Pan = { pointers: Map<number, { x: number; y: number }>; center: { x: number; y: number } };
+type Pan = {
+  pointers: Map<number, { x: number; y: number }>;
+  center: { x: number; y: number };
+  distance: number;
+};
+
+type SurfaceGeometry = {
+  bounds: Pick<DOMRect, "left" | "top">;
+  scale: number;
+};
 
 export function midpoint(a: { x: number; y: number }, b: { x: number; y: number }): { x: number; y: number } {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
@@ -24,11 +41,24 @@ export function worldPoint(
   clientX: number,
   clientY: number,
   bounds: Pick<DOMRect, "left" | "top">,
+  scale = 1,
 ): Pick<Point, "x" | "y"> | null {
-  const x = clientX - bounds.left;
-  const y = clientY - bounds.top;
+  const x = (clientX - bounds.left) / scale;
+  const y = (clientY - bounds.top) / scale;
   return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
 }
+
+function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+type InputOptions = {
+  getColor?: () => Stroke["color"];
+  getPenOnly?: () => boolean;
+  mapPoint?: (point: Pick<Point, "x" | "y">) => Pick<Point, "x" | "y">;
+  onPan?: (dx: number, dy: number) => void;
+  onPinch?: (factor: number, center: { x: number; y: number }) => void;
+};
 
 export class PointerInput {
   private active: ActiveGesture | null = null;
@@ -42,6 +72,7 @@ export class PointerInput {
     private readonly getWidth: () => number,
     private readonly onDraft: (gesture: FinishedGesture | null) => void,
     private readonly onFinish: (gesture: FinishedGesture) => void,
+    private readonly options: InputOptions = {},
   ) {
     surface.addEventListener("pointerdown", this.onDown);
     surface.addEventListener("pointermove", this.onMove);
@@ -71,9 +102,18 @@ export class PointerInput {
     window.removeEventListener("blur", this.cancel);
   }
 
-  private point(event: PointerEvent, active: ActiveGesture): Point | null {
-    const position = worldPoint(event.clientX, event.clientY, this.surface.getBoundingClientRect());
-    if (!position) return null;
+  private geometry(): SurfaceGeometry {
+    const bounds = this.surface.getBoundingClientRect();
+    const scale = bounds.width && this.surface.clientWidth
+      ? bounds.width / this.surface.clientWidth : 1;
+    return { bounds, scale };
+  }
+
+  private point(event: PointerEvent, active: ActiveGesture, geometry: SurfaceGeometry): Point | null {
+    const local = worldPoint(event.clientX, event.clientY, geometry.bounds, geometry.scale);
+    if (!local) return null;
+    const position = this.options.mapPoint?.(local) ?? local;
+    if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) return null;
     const t = Math.max(this.lastTime, active.startTime + Math.max(0, event.timeStamp - active.startStamp));
     this.lastTime = t;
     const pressure = event.pointerType === "pen" && Number.isFinite(event.pressure)
@@ -83,8 +123,8 @@ export class PointerInput {
     return pressure === undefined ? { ...position, t } : { ...position, pressure, t };
   }
 
-  private append(event: PointerEvent, active: ActiveGesture): void {
-    const point = this.point(event, active);
+  private append(event: PointerEvent, active: ActiveGesture, geometry = this.geometry()): void {
+    const point = this.point(event, active, geometry);
     if (!point) return;
     active.lastClient = { x: event.clientX, y: event.clientY };
     const previous = active.points.at(-1);
@@ -105,7 +145,10 @@ export class PointerInput {
       if (event.pointerType === "touch" && this.pan.pointers.size < 2) {
         this.pan.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         const positions = [...this.pan.pointers.values()];
-        if (positions.length === 2) this.pan.center = midpoint(positions[0], positions[1]);
+        if (positions.length === 2) {
+          this.pan.center = midpoint(positions[0], positions[1]);
+          this.pan.distance = distance(positions[0], positions[1]);
+        }
         this.surface.setPointerCapture(event.pointerId);
         event.preventDefault();
       }
@@ -122,11 +165,22 @@ export class PointerInput {
             [event.pointerId, second],
           ]),
           center: midpoint(first, second),
+          distance: distance(first, second),
         };
         this.active = null;
         this.surface.setPointerCapture(event.pointerId);
         event.preventDefault();
       }
+      return;
+    }
+    if (event.pointerType === "touch" && this.options.getPenOnly?.()) {
+      this.pan = {
+        pointers: new Map([[event.pointerId, { x: event.clientX, y: event.clientY }]]),
+        center: { x: event.clientX, y: event.clientY },
+        distance: 0,
+      };
+      this.surface.setPointerCapture(event.pointerId);
+      event.preventDefault();
       return;
     }
     const tool = this.getTool();
@@ -138,6 +192,8 @@ export class PointerInput {
       lastClient: { x: event.clientX, y: event.clientY },
       tool,
       width,
+      color: tool === "pen" || tool === "pencil" ? this.options.getColor?.() : undefined,
+      style: tool === "pencil" ? "pencil" : tool === "pen" ? "pen" : undefined,
       startStamp: event.timeStamp,
       startTime: this.lastTime + 1,
       points: [],
@@ -146,7 +202,7 @@ export class PointerInput {
     if (!active.points.length) return;
     this.active = active;
     this.surface.setPointerCapture(event.pointerId);
-    this.onDraft({ tool, width, points: [...active.points] });
+    this.onDraft({ tool, width, color: active.color, style: active.style, points: active.points });
     event.preventDefault();
   };
 
@@ -157,8 +213,16 @@ export class PointerInput {
       const positions = [...this.pan.pointers.values()];
       if (positions.length === 2) {
         const center = midpoint(positions[0], positions[1]);
-        this.workspace.scrollLeft -= center.x - this.pan.center.x;
-        this.workspace.scrollTop -= center.y - this.pan.center.y;
+        this.movePan(center.x - this.pan.center.x, center.y - this.pan.center.y);
+        const nextDistance = distance(positions[0], positions[1]);
+        if (this.pan.distance > 0 && nextDistance > 0) {
+          this.options.onPinch?.(nextDistance / this.pan.distance, center);
+        }
+        this.pan.distance = nextDistance;
+        this.pan.center = center;
+      } else if (positions.length === 1 && this.options.getPenOnly?.()) {
+        const center = positions[0];
+        this.movePan(center.x - this.pan.center.x, center.y - this.pan.center.y);
         this.pan.center = center;
       }
       event.preventDefault();
@@ -167,15 +231,28 @@ export class PointerInput {
     const active = this.active;
     if (!active || event.pointerId !== active.pointerId) return;
     const coalesced = event.getCoalescedEvents?.();
-    for (const sample of coalesced?.length ? coalesced : [event]) this.append(sample, active);
-    this.onDraft({ tool: active.tool, width: active.width, points: [...active.points] });
+    const geometry = this.geometry();
+    for (const sample of coalesced?.length ? coalesced : [event]) this.append(sample, active, geometry);
+    // Draft painting reads the live points on its next animation frame.
+    this.onDraft({
+      tool: active.tool, width: active.width, color: active.color, style: active.style,
+      points: active.points,
+    });
     event.preventDefault();
   };
 
+  private movePan(dx: number, dy: number): void {
+    if (this.options.onPan) {
+      this.options.onPan(dx, dy);
+    } else {
+      this.workspace.scrollLeft -= dx;
+      this.workspace.scrollTop -= dy;
+    }
+  }
+
   private onUp = (event: PointerEvent): void => {
     if (this.pan) {
-      this.pan.pointers.delete(event.pointerId);
-      if (this.pan.pointers.size === 0) this.pan = null;
+      this.releasePanPointer(event.pointerId);
       return;
     }
     const active = this.active;
@@ -183,15 +260,28 @@ export class PointerInput {
     this.append(event, active);
     this.active = null;
     this.onDraft(null);
-    this.onFinish({ tool: active.tool, width: active.width, points: active.points });
+    this.onFinish({
+      tool: active.tool, width: active.width, color: active.color, style: active.style,
+      points: active.points,
+    });
     event.preventDefault();
   };
 
   private onCancel = (event: PointerEvent): void => {
     if (this.pan) {
-      this.pan.pointers.delete(event.pointerId);
-      if (this.pan.pointers.size === 0) this.pan = null;
+      this.releasePanPointer(event.pointerId);
     }
     if (this.active?.pointerId === event.pointerId) this.cancel();
   };
+
+  private releasePanPointer(pointerId: number): void {
+    const pan = this.pan;
+    if (!pan || !pan.pointers.delete(pointerId)) return;
+    if (pan.pointers.size === 0) {
+      this.pan = null;
+    } else if (pan.pointers.size === 1) {
+      pan.center = [...pan.pointers.values()][0];
+      pan.distance = 0;
+    }
+  }
 }

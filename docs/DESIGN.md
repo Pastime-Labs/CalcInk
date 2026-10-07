@@ -88,9 +88,9 @@ erasing, variables, and plotting are rubric examples, not mandatory
 features.
 
 Simple local pages, persistent Readback correction, and the later bug bash
-are **CalcInk additions**, not source-brief mandates. Parentheses and powers
-are deferred to V2 so the brief's arithmetic, adjacent answer, offline,
-60 FPS, and submission gates receive the available time.
+are **CalcInk additions**, not source-brief mandates. V1 defers parentheses
+and powers to protect the brief's arithmetic, adjacent answer, offline,
+60 FPS, and submission gates. They are not in the approved V2 scope.
 The brief sets no numeric recognition-accuracy or answer-latency threshold:
 the linked benchmark's thresholds are internal.
 
@@ -104,8 +104,8 @@ Letters, including `x` as a variable, are not accepted expressions.
 Unsupported V1 notation includes parentheses, powers, stacked fractions,
 square roots, variables, algebra, free-form LaTeX, and equation solving.
 Notebook export/import, folders, search, accounts, cloud sync,
-collaboration, and cosmetic sound/haptics are deferred. They may be
-reconsidered for V2 only after V1 works. V1's opt-in diagnostic sample
+collaboration, and cosmetic sound/haptics are deferred. Future scope
+requires separate approval. V1's opt-in diagnostic sample
 export and emergency corrupt-record
 download are recovery/test tools, not general notebook portability. No
 external telemetry or upload of ink is part of V1. The diagnostic keeps

@@ -1,5 +1,6 @@
 import { PaddleOCR } from "@paddleocr/paddleocr-js";
 import { InvalidInkError, RASTER_VERSION, rasterizeLine } from "./raster";
+import { orderEquationBoxes } from "./order";
 import type {
   RecognitionIdentity,
   RecognitionRequest,
@@ -8,7 +9,7 @@ import type {
 } from "./protocol";
 
 const MODEL_ID = "PP-OCRv6_tiny_det+rec";
-const DECODER_ID = "ctc-mask-v1";
+const DECODER_ID = "ctc-mask-v2";
 const MODEL_ROOT = `${import.meta.env.BASE_URL}models/paddle/`;
 const ORT_ROOT = `${import.meta.env.BASE_URL}paddle-ort/`;
 const scope = self as DedicatedWorkerGlobalScope;
@@ -84,7 +85,7 @@ async function recognize(request: RecognizeRequest): Promise<void> {
     const [result] = await ocr.predict(image);
     if (cancelled.has(request.requestId)) return;
     if (!result) throw new Error("OCR returned no result");
-    const boxes = result.items.map((item) => {
+    const boxes = orderEquationBoxes(result.items).map((item) => {
       const masked = item as typeof item & { unmaskedText?: string; unmaskedScore?: number };
       if (typeof masked.unmaskedText !== "string" ||
           !Number.isFinite(masked.unmaskedScore)) {
@@ -95,6 +96,7 @@ async function recognize(request: RecognizeRequest): Promise<void> {
         score: item.score,
         unmaskedText: masked.unmaskedText,
         unmaskedScore: masked.unmaskedScore,
+        poly: item.poly.map(([x, y]) => [x, y] as [number, number]),
       };
     });
     post({
@@ -103,6 +105,8 @@ async function recognize(request: RecognizeRequest): Promise<void> {
       rawText: boxes.map((box) => box.text).join(""),
       unmaskedRawText: boxes.map((box) => box.unmaskedText).join(""),
       boxes,
+      detectedBoxes: result.metrics.detectedBoxes,
+      recognizedCount: result.metrics.recognizedCount,
       detMs: result.metrics.detMs,
       recMs: result.metrics.recMs,
       elapsedMs: performance.now() - start,

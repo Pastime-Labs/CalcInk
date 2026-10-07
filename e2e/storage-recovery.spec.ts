@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
+import { createNotebook, reloadNotebook } from "./notebook";
 
 type RawRecord = {
   page: { id: string; schemaVersion: number; strokes: unknown[] };
@@ -8,7 +9,7 @@ type RawRecord = {
 
 async function readRecord(page: Page, id: string): Promise<RawRecord | undefined> {
   return page.evaluate((key) => new Promise<RawRecord | undefined>((resolve, reject) => {
-    const opening = indexedDB.open("calcink", 2);
+    const opening = indexedDB.open("calcink");
     opening.onerror = () => reject(opening.error);
     opening.onsuccess = () => {
       const db = opening.result;
@@ -22,7 +23,7 @@ async function readRecord(page: Page, id: string): Promise<RawRecord | undefined
 }
 
 test("future page record stays recoverable instead of being overwritten", async ({ page }) => {
-  await page.goto("/");
+  await createNotebook(page);
   await expect(page.locator("#save-status")).toHaveText("Saved on this device");
 
   const surface = page.locator("#drawing-surface");
@@ -35,7 +36,7 @@ test("future page record stays recoverable instead of being overwritten", async 
   await expect(page.locator("#save-status")).toHaveText("Saved on this device");
 
   const future = await page.evaluate(() => new Promise<RawRecord>((resolve, reject) => {
-    const opening = indexedDB.open("calcink", 2);
+    const opening = indexedDB.open("calcink");
     opening.onerror = () => reject(opening.error);
     opening.onsuccess = () => {
       const db = opening.result;
@@ -50,7 +51,7 @@ test("future page record stays recoverable instead of being overwritten", async 
           return;
         }
         futureRecord = structuredClone(records[0]);
-        futureRecord.page.schemaVersion = 3;
+        futureRecord.page.schemaVersion = 4;
         store.put(futureRecord, futureRecord.page.id);
       };
       tx.oncomplete = () => { db.close(); resolve(futureRecord); };
@@ -75,9 +76,11 @@ test("future page record stays recoverable instead of being overwritten", async 
 
   await page.locator("#start-fresh").click();
   await expect(page.locator("#page-title")).toHaveText("Untitled page");
+  await expect(page.locator("#workspace")).toHaveAttribute("data-mode", "notebook");
+  await expect(page.locator("#pages-button")).toBeEnabled();
   await expect(page.locator("#error-banner")).toBeHidden();
   expect(await readRecord(page, future.page.id)).toEqual(future);
-  await page.reload();
+  await reloadNotebook(page);
   await expect(page.locator("#page-title")).toHaveText("Untitled page");
   expect(await readRecord(page, future.page.id)).toEqual(future);
 });

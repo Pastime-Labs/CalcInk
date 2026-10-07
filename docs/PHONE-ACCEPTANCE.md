@@ -14,10 +14,13 @@ they contain private ink and browser details.
    and forward phone port `4173` to desktop `localhost:4173`. Open
    `http://localhost:4173` in phone Chrome. See
    [Chrome's Android port-forwarding guide](https://developer.chrome.com/docs/devtools/remote-debugging/local-server).
-3. Wait for **Recognition ready** and **Ready offline on this device**.
-   Accept any app update and reload. Export one private diagnostic and
-   verify `model.decoder` is `ctc-mask-v1` before starting a scored set.
-   Record first-install and first-model-load times separately from warm OCR.
+3. Wait for drawing controls to enable. In remote DevTools, confirm the
+   hidden `#recognition-status` says `Recognition ready` and `#offline-status`
+   says `Ready offline on this device.` Normal status badges are not shown
+   in the app. Accept any app update and reload. Export one private
+   diagnostic and verify `model.decoder` is `ctc-mask-v2` before starting
+   a scored set. Record first-install and first-model-load times separately
+   from warm OCR.
 
 ## Fresh handwriting and latency
 
@@ -64,3 +67,38 @@ Do not mark Phase 5 passed from this runbook alone. The owner must review
 the actual score, trace, memory, offline, accessibility, and visual
 evidence, then complete the model redistribution review before a public
 release.
+
+## V2-specific checks
+
+On the same physical phone, open the library, create one Notebook and one
+Black infinite canvas, return home, then reopen both after reload and
+offline. Open the home `+` menu by touch and keyboard; dismiss it with
+outside tap and Escape. No folded-corner page control should appear.
+
+In the notebook, add several A4 pages and scroll from first to last as one
+continuous book. Select a middle page, write, scroll away and back, and
+reload: ink must remain on the correct page. Check that the page fits the
+available view after portrait/landscape rotation. Move the 25%-200% page
+zoom slider at both ends and check that ink and answers remain aligned;
+pinch the page and check that the slider value follows. There should be
+no separate Fit Page or 100% buttons. Ink and answer placement must stay
+under the pointer after a pinch.
+Repeat with browser Ctrl-wheel zoom on desktop. One finger must write without
+scrolling. Pinch around ink, then pan with two fingers and release one
+finger: the page must not jump or keep moving.
+Two-finger vertical book scrolling must not create stray ink.
+
+On the black canvas, draw near the initial view, pan in several directions,
+zoom, draw again, and return to the first strokes. The surface must not show
+A4 edges, and stored strokes and answers must remain aligned after camera
+moves and reload. With Pen-only mode on, a finger must pan without drawing
+while a stylus still writes where available. Test all colors, notebook
+templates, lasso move/delete/undo, and both workspace kinds after reload.
+Use a fresh handwritten board sample before making any board-recognition
+accuracy claim; preserved ink and aligned OCR overlays alone do not prove it.
+Record frame traces again during active OCR with Pencil and glass controls
+visible. On desktop, select a notebook page with a settled answer, then
+inspect its real A4 print preview and saved PDF for template, color, ink,
+answer, and clipping. Confirm that other notebook pages are absent; do not
+infer print quality from the Playwright CSS test alone. Black-canvas PDF
+export is not in V2.

@@ -2,7 +2,7 @@
 
 Status: Implemented locally in Phase 3; **not yet an accepted release model**.
 PP-OCRv6 tiny detection plus recognition via `@paddleocr/paddleocr-js`
-is the chosen V1 path. The active `ctc-mask-v1` decoder is an experiment,
+is the chosen V1 path. The active `ctc-mask-v2` decoder is an experiment,
 not a demonstrated accuracy improvement. `htt-mini` remains a prototype
 comparison baseline, not the production fallback.
 
@@ -38,16 +38,19 @@ redistribution decision. Model archives remain Git-ignored until then.
 nested Worker during `npm ci`; development and build verify the patch.
 It preserves the original dictionary and class indices, including CTC
 blank, but limits the winning class to digits, arithmetic operators,
-decimal point, `=`, supported operator variants, and space. In the same
+decimal point, `=`, `二`, supported operator variants, and space.
+Normalization maps `二` to `=`; it can recover an equals-like read but can
+also turn a different handwritten mark into a false `=`. In the same
 pass it keeps the unrestricted decode and per-box scores for comparison.
 This is not a vocabulary replacement, model retraining, or a guarantee
 that a constrained read is correct.
 
 The application evaluates only the restricted read and shows the
-unrestricted read in Readback when it differs. A saved private `4=` export
-originally recorded `4二`; a current masked replay of the same ink yielded
-restricted `4`, unrestricted `二4`, and no answer. This demonstrates
-non-answering for that sample, **not** recognition improvement. A mask can
+unrestricted read in Readback when it differs. Readback displays `二` as `=`,
+while diagnostic JSON retains both original OCR strings. A saved private `4=` export
+originally recorded `4二`; an earlier `ctc-mask-v1` replay of the same ink
+yielded restricted `4`, unrestricted `二4`, and no answer. This historical
+result does not establish how v2 reads that sample. A mask can
 turn an obvious unsupported read into a plausible wrong expression, so fresh
 handwriting and answer checks remain mandatory. SDK changes must fail the
 pinned byte-for-byte patch check rather than silently ship an unmasked Worker.
@@ -165,8 +168,8 @@ pen-up-to-settled-result separately.
    Notation normalization, V1 arithmetic grammar validation, and manual
    correction happen outside the adapter. Handwriting scope is digits
    `0`-`9`, `+`, `-`, `×`, `÷`, `.`, and terminal `=`; normalization may remove
-   spacing and map `×`/`÷`/Unicode `−` to internal `*`/`/`/`-`.
-   Parentheses, powers, and variables are V2.
+   spacing and map `×`/`÷`/Unicode `−` to internal `*`/`/`/`-`, and `二` to `=`.
+   Parentheses, powers, and variables remain outside the approved V2 scope.
    Paddle's pretrained output dictionary stays intact: an alphabetic
    unrestricted read is retained for diagnosis, **not** mapped to a digit.
    Old HTT-specific LaTeX words such as `\times` are not V1 Paddle aliases.

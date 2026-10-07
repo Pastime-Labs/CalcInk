@@ -7,7 +7,8 @@ const packageRoot = new URL("../node_modules/@paddleocr/paddleocr-js/", import.m
 const workerFile = new URL("dist/assets/worker-entry-C9UNuyOJ.js", packageRoot);
 const packageFile = new URL("package.json", packageRoot);
 const unpatchedSha256 = "477db3f009c118823a5f9ebe15f1e96c1c464165715ba28a9884290f61addf52";
-const patchedSha256 = "f3929e5f7b3083bfcf895119f8a60ebe46b0b2b7e589c938c059e9756fd5a61a";
+const previousPatchedSha256 = "f3929e5f7b3083bfcf895119f8a60ebe46b0b2b7e589c938c059e9756fd5a61a";
+const patchedSha256 = "87547321b8e106fd81f97a6d9359495ad7ba86ebc214bf84ddc6e96a0780c196";
 const decoderStart = "function decodeCTCSample(data, offset, timeSteps, classes, charDict) {";
 const decoderEnd = "\nfunction postprocess(output, charDict) {";
 const oldRecMap = "return decoded.map(({ text, score }) => ({ text, score }));";
@@ -24,7 +25,7 @@ export function decodeCTCSample(data, offset, timeSteps, classes, charDict) {
       offset + timeSteps * classes > data.length) {
     throw new Error("CalcInk CTC mask: model dictionary does not match output");
   }
-  const CALCINK_CTC_MASK_V1 = new Set("0123456789+-*/.=\u00d7\u00f7\u2212 ");
+  const CALCINK_CTC_MASK_V2 = new Set("0123456789+-*/.=\u00d7\u00f7\u2212\u4e8c ");
   for (const required of "0123456789+-*/.=") {
     if (!charDict.includes(required)) {
       throw new Error(`CalcInk CTC mask: missing ${required} in model dictionary`);
@@ -33,7 +34,7 @@ export function decodeCTCSample(data, offset, timeSteps, classes, charDict) {
   const allowed = new Uint8Array(classes);
   allowed[0] = 1;
   for (let index = 0; index < charDict.length; index += 1) {
-    if (CALCINK_CTC_MASK_V1.has(charDict[index])) allowed[index + 1] = 1;
+    if (CALCINK_CTC_MASK_V2.has(charDict[index])) allowed[index + 1] = 1;
   }
 
   let previous = -1;
@@ -87,6 +88,16 @@ function replaceOnce(source, before, after) {
   return source.slice(0, first) + after + source.slice(first + before.length);
 }
 
+function replaceDecoder(source) {
+  const start = source.indexOf(decoderStart);
+  const end = source.indexOf(decoderEnd, start);
+  if (start < 0 || end < 0 || source.indexOf(decoderStart, start + 1) >= 0) {
+    throw new Error("PaddleOCR CTC decoder location changed");
+  }
+  const decoder = decodeCTCSample.toString().replaceAll("\r\n", "\n");
+  return source.slice(0, start) + decoder + source.slice(end);
+}
+
 async function main() {
   const checkOnly = process.argv[2] === "--check";
   if (process.argv.length > (checkOnly ? 3 : 2)) {
@@ -97,18 +108,25 @@ async function main() {
     throw new Error("PaddleOCR.js version changed; review the CTC mask patch");
   }
   let source = await readFile(workerFile, "utf8");
-  if (source.includes("CALCINK_CTC_MASK_V1")) {
+  if (source.includes("CALCINK_CTC_MASK_V1") || source.includes("CALCINK_CTC_MASK_V2")) {
     if (!source.includes(newRecMap) || !source.includes(newItem)) {
       throw new Error("PaddleOCR CTC mask is incomplete");
     }
+    let changed = false;
     if (!source.includes(newFilter)) {
       if (checkOnly) throw new Error("PaddleOCR CTC mask diagnostics are not installed");
       source = replaceOnce(source, oldFilter, newFilter);
-      await writeFile(workerFile, source);
+      changed = true;
+    }
+    if (createHash("sha256").update(source).digest("hex") === previousPatchedSha256) {
+      if (checkOnly) throw new Error("PaddleOCR CTC mask v2 is not installed");
+      source = replaceDecoder(source);
+      changed = true;
     }
     if (createHash("sha256").update(source).digest("hex") !== patchedSha256) {
       throw new Error("PaddleOCR CTC mask bytes changed; review the decoder patch");
     }
+    if (changed) await writeFile(workerFile, source);
     return;
   }
   if (checkOnly) throw new Error("PaddleOCR CTC mask is not installed; run npm install");
@@ -116,13 +134,7 @@ async function main() {
   if (sha256 !== unpatchedSha256) {
     throw new Error("PaddleOCR Worker bytes changed; review the CTC mask patch");
   }
-  const start = source.indexOf(decoderStart);
-  const end = source.indexOf(decoderEnd, start);
-  if (start < 0 || end < 0 || source.indexOf(decoderStart, start + 1) >= 0) {
-    throw new Error("PaddleOCR CTC decoder location changed");
-  }
-  const decoder = decodeCTCSample.toString().replaceAll("\r\n", "\n");
-  source = source.slice(0, start) + decoder + source.slice(end);
+  source = replaceDecoder(source);
   source = replaceOnce(source, oldRecMap, newRecMap);
   source = replaceOnce(source, oldItem, newItem);
   source = replaceOnce(source, oldFilter, newFilter);

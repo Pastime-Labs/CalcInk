@@ -18,10 +18,11 @@ origin after the first installation.
 
 The accepted handwritten language is the PS arithmetic set: digits
 `0`-`9`, `.`, `+`, `-`, `×`, `÷`, and a final `=`. Parentheses, powers,
-variables, and symbolic algebra are V2 scope. The parser internally uses
-`*` and `/` for the two drawn operators. The recognizer keeps its original
-pretrained dictionary; application validation rejects unsupported output
-rather than changing a model class mapping or guessing a digit.
+variables, and symbolic algebra remain outside the approved V2 scope.
+The parser internally uses `*` and `/` for the two drawn operators. The
+recognizer keeps its original pretrained dictionary; application validation
+rejects unsupported output rather than changing a model class mapping or
+guessing a digit.
 
 ## 2. Data Flow
 

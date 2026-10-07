@@ -118,7 +118,20 @@ export function groupEquationLines(strokes: readonly Stroke[]): EquationLine[] {
   }
   groups.push(...looseGroups);
 
-  return groups
+  const separated = groups.flatMap((group) => {
+    const rows: Group[] = [];
+    for (const mark of [...group.marks].sort((a, b) => a.bounds.left - b.bounds.left)) {
+      const last = rows.at(-1);
+      if (last && mark.bounds.left - last.bounds.right <= Math.max(48, scale * 4)) {
+        include(last, mark);
+      } else {
+        rows.push(newGroup(mark));
+      }
+    }
+    return rows;
+  });
+
+  return separated
     .map((group) => {
       const ordered = group.marks.sort((a, b) => a.index - b.index);
       return {

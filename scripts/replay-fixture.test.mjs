@@ -55,6 +55,10 @@ test("scores notation-only differences as an exact read", () => {
     normalizedRead: "9/3-1=",
     exactRead: true,
   });
+  assert.deepEqual(compareRead("11+11\u4e8c", "11+11="), {
+    normalizedRead: "11+11=",
+    exactRead: true,
+  });
 });
 
 test("never repairs an alphabetic OCR read into a digit", () => {

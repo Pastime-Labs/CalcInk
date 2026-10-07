@@ -25,6 +25,7 @@ export function normalizeRead(raw: string): NormalizedRead {
     if (character === "\u00d7") canonical = "*";
     else if (character === "\u00f7") canonical = "/";
     else if (character === "\u2212") canonical = "-";
+    else if (character === "\u4e8c") canonical = "=";
     else if (
       isDigit(character) ||
       character === "." ||

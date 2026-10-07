@@ -39,6 +39,8 @@ describe("InkDocument validation and snapshots", () => {
     expect(() =>
       new InkDocument(page([{ id: "bad", width: 1, points: [{ x: Infinity, y: 0 }] }])),
     ).toThrow();
+    expect(() => new InkDocument(page([{ ...line("bad"), color: "red" }]))).toThrow();
+    expect(() => new InkDocument(page([{ ...line("bad"), style: "marker" as Stroke["style"] }]))).toThrow();
   });
 
   it("clones constructor input, additions, page snapshots, and stroke snapshots", () => {
@@ -57,6 +59,20 @@ describe("InkDocument validation and snapshots", () => {
     expect(document.page.strokes.map((stroke) => stroke.points[0].x)).toEqual([0, 0]);
   });
 
+  it("preserves color and pencil style through pixel erasing and history", () => {
+    const styled = { ...line("pencil"), color: "#eAB123", style: "pencil" as const };
+    const document = new InkDocument(page([styled]));
+    expect(document.erasePixels([{ x: 50, y: -5 }, { x: 50, y: 5 }], 4)).toBe(true);
+    const fragments = document.page.strokes;
+    expect(fragments).toHaveLength(2);
+    expect(fragments.every((stroke) => stroke.color === "#eAB123" && stroke.style === "pencil"))
+      .toBe(true);
+    expect(document.undo()).toBe(true);
+    expect(document.page.strokes[0]).toEqual(styled);
+    expect(document.redo()).toBe(true);
+    expect(document.page.strokes).toEqual(fragments);
+  });
+
   it("rejects invalid edit input without changing ink or history", () => {
     const document = new InkDocument(page([line("a")]));
     const before = document.page;
@@ -68,9 +84,48 @@ describe("InkDocument validation and snapshots", () => {
     expect(document.canUndo).toBe(false);
     expect(document.canRedo).toBe(false);
   });
+
+  it("retains A4 metadata and upgrades legacy geometry only when its template changes", () => {
+    const a4 = {
+      ...page([line("a")]),
+      schemaVersion: 3 as const,
+      geometry: "a4" as const,
+      template: "ruled" as const,
+    };
+    const document = new InkDocument(a4);
+    expect(document.setTemplate("grid")).toBe(true);
+    expect(document.page).toMatchObject({ schemaVersion: 3, geometry: "a4", template: "grid" });
+    expect(document.page.strokes).toEqual(a4.strokes);
+    const legacy = new InkDocument(page([line("b")]));
+    expect(legacy.setTemplate("ruled")).toBe(false);
+    expect(legacy.page.schemaVersion).toBe(2);
+    expect(legacy.setTemplate("dots")).toBe(true);
+    expect(legacy.page).toMatchObject({ schemaVersion: 3, geometry: "legacy", template: "dots" });
+  });
 });
 
 describe("ink history", () => {
+  it("moves or deletes selected strokes as one undoable edit", () => {
+    const document = new InkDocument(page([line("a"), line("b", 20), line("c", 40)]));
+    const moved = document.strokes.map((stroke) => ({
+      ...stroke,
+      points: stroke.id === "b"
+        ? stroke.points.map((point) => ({ ...point, x: point.x + 5 }))
+        : stroke.points,
+    }));
+    expect(document.replaceSelectedStrokes(new Set(["b"]), moved)).toBe(true);
+    expect(document.strokes.find((stroke) => stroke.id === "b")!.points[0].x).toBe(5);
+    expect(document.undo()).toBe(true);
+    expect(document.strokes.find((stroke) => stroke.id === "b")!.points[0].x).toBe(0);
+    expect(document.redo()).toBe(true);
+    expect(document.replaceSelectedStrokes(new Set(["b", "c"]), null)).toBe(true);
+    expect(document.strokes.map((stroke) => stroke.id)).toEqual(["a"]);
+    expect(document.undo()).toBe(true);
+    expect(document.strokes.map((stroke) => stroke.id)).toEqual(["a", "b", "c"]);
+    expect(document.replaceSelectedStrokes(new Set(["b"]), document.strokes)).toBe(false);
+    expect(() => document.replaceSelectedStrokes(new Set(["missing"]), null)).toThrow();
+  });
+
   it("records each ink edit once and invalidates redo only after a new edit", () => {
     const document = new InkDocument(page());
     expect(document.addStroke(line("a"))).toBe(true);

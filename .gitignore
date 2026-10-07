@@ -1,11 +1,6 @@
 node_modules/
 .npm-cache/
-/prototype/evidence/
-/prototype/model-archives/
-/prototype/public/models/htt/*.onnx
-/prototype/public/models/htt/vocab.json
-/prototype/public/models/paddle/*.tar
-/prototype/public/paddle-ort/
+/prototype/
 /docs/Software Dev Bootcamp.pdf
 /public/models/**/*.onnx
 /public/models/**/*.tar
@@ -14,6 +9,9 @@ node_modules/
 /local-assets/
 /PP-OCRv6_tiny_det_onnx_infer.tar
 /PP-OCRv6_tiny_rec_onnx_infer.tar
+/Frontend_design_current/
+/Screenshot *.png
+/WhatsApp Image *.jpeg
 dist/
 coverage/
 playwright-report/

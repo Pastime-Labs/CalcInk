@@ -58,6 +58,21 @@ async function ensureAsset(target, expectedHash, load) {
   console.log(`prepared ${target}`);
 }
 
+async function downloadModel(model) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(model.url, { signal: AbortSignal.timeout(120_000) });
+      if (!response.ok) {
+        throw new Error(`Model download failed: ${model.name} (${response.status})`);
+      }
+      return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      if (attempt === 3) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1_000));
+    }
+  }
+}
+
 const ortPackage = JSON.parse(
   await readFile(resolve(root, "node_modules/onnxruntime-web/package.json"), "utf8"),
 );
@@ -73,9 +88,7 @@ for (const model of models) {
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
-    const response = await fetch(model.url);
-    if (!response.ok) throw new Error(`Model download failed: ${model.name} (${response.status})`);
-    return Buffer.from(await response.arrayBuffer());
+    return downloadModel(model);
   });
 }
 

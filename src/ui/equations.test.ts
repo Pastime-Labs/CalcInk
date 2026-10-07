@@ -56,13 +56,19 @@ describe("EquationController", () => {
       type: "ready",
       requestId: 1,
       modelId: "PP-OCRv6_tiny_det+rec",
-      decoderId: "ctc-mask-v1",
+      decoderId: "ctc-mask-v2",
       elapsedMs: 1,
     });
     await vi.runOnlyPendingTimersAsync();
     const first = worker.sent.find((request) => request.type === "recognize");
     if (!first || first.type !== "recognize") throw new Error("First read was not sent");
-    const box = { text: "9+9=", score: 0.8, unmaskedText: "g+g=", unmaskedScore: 0.9 };
+    const box = {
+      text: "9+9=",
+      score: 0.8,
+      unmaskedText: "g+g=",
+      unmaskedScore: 0.9,
+      poly: [[1, 2], [3, 2]] as [number, number][],
+    };
     worker.emit({
       type: "result",
       requestId: first.requestId,
@@ -72,6 +78,8 @@ describe("EquationController", () => {
       rawText: "9+9=",
       unmaskedRawText: "g+g=",
       boxes: [box],
+      detectedBoxes: 2,
+      recognizedCount: 1,
       detMs: 3,
       recMs: 4,
       elapsedMs: 10,
@@ -82,6 +90,7 @@ describe("EquationController", () => {
     expect(controller.lines[0]?.message).toContain("Verify this answer");
     ink.points[0]!.x = 999;
     box.text = "changed";
+    box.poly[0]![0] = 99;
 
     controller.retry();
     const init = worker.sent.at(-1);
@@ -90,7 +99,7 @@ describe("EquationController", () => {
       type: "ready",
       requestId: init.requestId,
       modelId: "PP-OCRv6_tiny_det+rec",
-      decoderId: "ctc-mask-v1",
+      decoderId: "ctc-mask-v2",
       elapsedMs: 1,
     });
     await vi.runOnlyPendingTimersAsync();
@@ -121,7 +130,12 @@ describe("EquationController", () => {
         unmaskedRawText: "g+g=",
         normalizedText: "9+9=",
         result: { kind: "value", display: "18" },
-        boxes: [{ text: "9+9=", score: 0.8, unmaskedText: "g+g=", unmaskedScore: 0.9 }],
+        boxes: [{
+          text: "9+9=", score: 0.8, unmaskedText: "g+g=", unmaskedScore: 0.9,
+          poly: [[1, 2], [3, 2]],
+        }],
+        detectedBoxes: 2,
+        recognizedCount: 1,
         detMs: 3,
         recMs: 4,
         elapsedMs: 10,
@@ -129,7 +143,7 @@ describe("EquationController", () => {
       },
       model: {
         id: "PP-OCRv6_tiny_det+rec",
-        decoder: "ctc-mask-v1",
+        decoder: "ctc-mask-v2",
         detector: {
           id: "PP-OCRv6_tiny_det",
           archiveSha256: "ff6ab415b0a6e0c488550f2fb5d5046f1719848df220b2dc21b56402a65bc05d",
@@ -144,14 +158,129 @@ describe("EquationController", () => {
     expect(sample.sampleId).toMatch(/^[0-9a-f-]{36}$/);
     sample.strokes[0]!.points[0]!.x = 500;
     sample.firstRead.boxes[0]!.text = "changed again";
+    sample.firstRead.boxes[0]!.poly![0]![0] = 77;
     const repeated = controller.diagnosticSampleFor(lineId, "9*2=", environment)!;
     expect(repeated.strokes[0]!.points[0]!.x).toBe(10);
     expect(repeated.firstRead.boxes[0]!.text).toBe("9+9=");
+    expect(repeated.firstRead.boxes[0]!.poly![0]![0]).toBe(1);
     expect(() => controller.diagnosticSampleFor(lineId, "9+=", environment)).toThrow();
     controller.inkChanged(page("A", [stroke("other", 10)]));
     expect(controller.hasFirstRead(controller.lines[0]!.line.lineId)).toBe(false);
     controller.setPage(page("B", [stroke("one", 10)]), {});
     expect(controller.hasFirstRead(controller.lines[0]!.line.lineId)).toBe(false);
+    controller.destroy();
+  });
+
+  it("does not assume missing terminal equals was never drawn", async () => {
+    vi.useFakeTimers();
+    const worker = new FakeWorker();
+    const controller = new EquationController(() => {}, () => {}, () => worker as unknown as Worker);
+    controller.setPage(page("A", [stroke("one", 10)]), {});
+    worker.emit({ type: "ready", requestId: 1, modelId: "test", elapsedMs: 1 });
+    await vi.runOnlyPendingTimersAsync();
+    const request = worker.sent.find((item) => item.type === "recognize");
+    if (!request || request.type !== "recognize") throw new Error("Read was not sent");
+    worker.emit({
+      type: "result",
+      requestId: request.requestId,
+      pageId: request.pageId,
+      lineId: request.lineId,
+      canvasRevisionId: request.canvasRevisionId,
+      rawText: "21",
+      boxes: [{ text: "21", score: 0.8 }],
+      detMs: 1,
+      recMs: 1,
+      elapsedMs: 2,
+      raster: { width: 20, height: 20, version: "test" },
+    });
+    expect(controller.lines[0]).toMatchObject({
+      phase: "incomplete",
+      rawRead: "21",
+      result: null,
+      message: "No final = was recognized. Check the ink or correct the read.",
+    });
+    const sample = controller.diagnosticSampleFor(request.lineId, "1+2", {
+      userAgent: "Test browser",
+      language: "en",
+      devicePixelRatio: 1,
+      online: true,
+      exportedAt: "2026-10-05T00:00:00.000Z",
+    });
+    expect(sample?.intendedExpression).toBe("1+2");
+    expect(() => controller.diagnosticSampleFor(request.lineId, "1+", sample!.environment)).toThrow();
+    controller.destroy();
+  });
+
+  it("evaluates an OCR read ending in U+4E8C while preserving the raw read", async () => {
+    vi.useFakeTimers();
+    const worker = new FakeWorker();
+    const controller = new EquationController(() => {}, () => {}, () => worker as unknown as Worker);
+    controller.setPage(page("A", [stroke("one", 10)]), {});
+    worker.emit({ type: "ready", requestId: 1, modelId: "test", elapsedMs: 1 });
+    await vi.runOnlyPendingTimersAsync();
+    const request = worker.sent.find((item) => item.type === "recognize");
+    if (!request || request.type !== "recognize") throw new Error("Read was not sent");
+    worker.emit({
+      type: "result",
+      requestId: request.requestId,
+      pageId: request.pageId,
+      lineId: request.lineId,
+      canvasRevisionId: request.canvasRevisionId,
+      rawText: "11+11\u4e8c",
+      boxes: [{ text: "11+11\u4e8c", score: 0.8 }],
+      detMs: 1,
+      recMs: 1,
+      elapsedMs: 2,
+      raster: { width: 20, height: 20, version: "test" },
+    });
+    expect(controller.lines[0]).toMatchObject({
+      phase: "complete",
+      rawRead: "11+11\u4e8c",
+      normalizedRead: "11+11=",
+      result: { kind: "value", display: "22" },
+    });
+    const sample = controller.diagnosticSampleFor(request.lineId, "11+11=", {
+      userAgent: "test",
+      language: "en",
+      devicePixelRatio: 1,
+      online: true,
+      exportedAt: "2026-10-07T00:00:00.000Z",
+    });
+    expect(sample?.firstRead).toMatchObject({
+      rawText: "11+11\u4e8c",
+      normalizedText: "11+11=",
+    });
+    controller.destroy();
+  });
+
+  it("reports an empty OCR result as a completed read, not pending work", async () => {
+    vi.useFakeTimers();
+    const worker = new FakeWorker();
+    const controller = new EquationController(() => {}, () => {}, () => worker as unknown as Worker);
+    controller.setPage(page("A", [stroke("one", 10)]), {});
+    worker.emit({ type: "ready", requestId: 1, modelId: "test", elapsedMs: 1 });
+    await vi.runOnlyPendingTimersAsync();
+    const request = worker.sent.find((item) => item.type === "recognize");
+    if (!request || request.type !== "recognize") throw new Error("Read was not sent");
+    worker.emit({
+      type: "result",
+      requestId: request.requestId,
+      pageId: request.pageId,
+      lineId: request.lineId,
+      canvasRevisionId: request.canvasRevisionId,
+      rawText: "",
+      boxes: [],
+      detMs: 1,
+      recMs: 1,
+      elapsedMs: 2,
+      raster: { width: 20, height: 20, version: "test" },
+    });
+    expect(controller.lines[0]).toMatchObject({
+      phase: "incomplete",
+      rawRead: "",
+      message: "No text was recognized. Check the ink or correct the read.",
+    });
+    expect(controller.hasFirstRead(request.lineId)).toBe(true);
     controller.destroy();
   });
 
@@ -214,7 +343,7 @@ describe("EquationController", () => {
       type: "ready",
       requestId: 1,
       modelId: "PP-OCRv6_tiny_det+rec",
-      decoderId: "ctc-mask-v1",
+      decoderId: "ctc-mask-v2",
       elapsedMs: 1,
     });
     await vi.runOnlyPendingTimersAsync();
@@ -252,6 +381,55 @@ describe("EquationController", () => {
       exportedAt: "2026-10-04T00:00:00.000Z",
     });
     expect(sample?.firstRead).toMatchObject({ normalizedText: null, result: null });
+    controller.destroy();
+  });
+
+  it("invalidates automatic and corrected answers when lasso moves ink within a line", async () => {
+    vi.useFakeTimers();
+    const worker = new FakeWorker();
+    const corrections = vi.fn();
+    const controller = new EquationController(
+      () => {},
+      corrections,
+      () => worker as unknown as Worker,
+    );
+    controller.setPage(page("A", [stroke("left", 10), stroke("right", 35)]), {});
+    const originalSignature = controller.lines[0]!.line.signature;
+    const lineId = controller.lines[0]!.line.lineId;
+    worker.emit({ type: "ready", requestId: 1, modelId: "test", elapsedMs: 1 });
+    await vi.runOnlyPendingTimersAsync();
+    const request = worker.sent.find((item) => item.type === "recognize");
+    if (!request || request.type !== "recognize") throw new Error("Read was not sent");
+    worker.emit({
+      type: "result",
+      requestId: request.requestId,
+      pageId: request.pageId,
+      lineId: request.lineId,
+      canvasRevisionId: request.canvasRevisionId,
+      rawText: "1+1=",
+      boxes: [{ text: "1+1=", score: 0.9 }],
+      detMs: 1,
+      recMs: 1,
+      elapsedMs: 2,
+      raster: { width: 20, height: 20, version: "test" },
+    });
+    expect(controller.lines[0]?.result).toMatchObject({ kind: "value", display: "2" });
+    expect(controller.hasFirstRead(lineId)).toBe(true);
+
+    controller.inkChanged(page("A", [stroke("left", 10), stroke("right", 45)]));
+    expect(controller.lines[0]?.line.signature).toBe(originalSignature);
+    expect(controller.lines[0]?.phase).toBe("queued");
+    expect(controller.lines[0]?.result).toBeNull();
+    expect(controller.hasFirstRead(lineId)).toBe(false);
+
+    const guard = controller.guardFor(lineId)!;
+    expect(controller.applyCorrection(guard, "1+2=")).toBeNull();
+    expect(controller.lines[0]?.result).toMatchObject({ kind: "value", display: "3" });
+    controller.inkChanged(page("A", [stroke("left", 10), stroke("right", 55)]));
+    expect(controller.lines[0]?.phase).toBe("queued");
+    expect(controller.lines[0]?.result).toBeNull();
+    expect(controller.corrections).toEqual({});
+    expect(corrections).toHaveBeenLastCalledWith({});
     controller.destroy();
   });
 
