@@ -18,7 +18,8 @@ Before tagging a release candidate:
 1. Freeze V1 to the problem statement's written arithmetic vocabulary:
    digits, decimal point, `+`, `-`, `×`, `÷`, and terminal `=`. Reject
    unsupported model reads rather than guessing digits or operators;
-   parentheses, powers, and variable algebra are V2.
+   parentheses, powers, and variable algebra remain outside the approved
+   V2 scope.
 2. Complete the P-01 through P-10 acceptance matrix in
    [quality and performance](17-quality-and-performance.md), including
    owner-only recognition scores, latency distribution, real-device notes,

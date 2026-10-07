@@ -79,7 +79,7 @@ stroke signature within its page, as specified in
 
 | Condition | Required behavior |
 | --- | --- |
-| No line or no terminal `=` | Keep ink; no numeric answer. Partial read may say "Finish with =". |
+| No line or no terminal `=` | Keep ink; no numeric answer. Partial read says no final `=` was recognized, without assuming the user omitted it. |
 | Model still loading | Drawing/editing work; show loading status, not an old or guessed answer. |
 | Group split/merge | Invalidate affected line signatures and all in-flight work for the old revision. |
 | Response for old page, line, request, or revision | Ignore without changing UI or storage. |

@@ -2,7 +2,8 @@
 
 Status: Implemented locally in Phase 2 with focused tests. The prototype parser handles basic
 arithmetic; the V1 parser is a deterministic numeric evaluator, not a
-symbolic algebra system. Parentheses and powers are deferred to V2.
+symbolic algebra system. Parentheses and powers remain outside the
+approved V2 scope.
 
 ## Purpose and boundary
 

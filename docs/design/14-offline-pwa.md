@@ -40,7 +40,9 @@ every hashed bundle asset listed in the build-generated `offline-assets.json`.
 The list itself must be cached in this app's Workbox precache; a missing chunk
 or invalid list prevents a ready claim even if another cache has the file.
 Online retry can restore a missing hashed chunk, but a missing revisioned
-precache key remains a visible failure. The prototype lab's on-demand cache
+precache key or entire precache requires a fresh worker install. That repair
+uses a temporary worker URL; the next online load may show one update prompt
+to return to the normal URL. The prototype lab's on-demand cache
 does not meet this V1 readiness contract. If the app is offline
 before that point, explain that first installation is incomplete. Do not
 confuse `navigator.onLine` with proof that an asset is cached.

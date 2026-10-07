@@ -1,19 +1,24 @@
 # CalcInk
 
-CalcInk V1 is a local-first handwritten arithmetic notebook for the
-Inter IIT Bootcamp Software problem statement.
-The root app implements the core Phase 1-4 paths: vector ink, local pages,
-arithmetic evaluation, PaddleOCR readback, correction, IndexedDB storage,
-and a full-asset offline install path. Phase exit gates remain open. The
-earlier HTT notebook and comparison lab remain untouched in
-[`prototype/`](prototype/README.md).
+CalcInk is a local-first handwriting workspace built for the Inter IIT
+Bootcamp Software problem statement. Write an arithmetic expression ending
+in `=`; the app reads the ink and places a calculated result beside it.
+Recognition, evaluation, and storage run in the browser, without an account
+or cloud API.
 
-Write digits and `+`, `-`, `×`, `÷`, `.`, ending with `=`. A supported
-PaddleOCR read is evaluated beside the ink; edit the line and its old
-answer is removed immediately. Use Readback to see the exact model read
-and correct it without altering the ink. Variables, algebra, parentheses,
-and powers are outside V1. All inference and arithmetic run in the browser;
-there is no account, backend, cloud OCR, or math API.
+The home library offers two workspaces: a scrollable A4 notebook and an
+unbounded black canvas. Both support pen and pencil, colors, erasers,
+undo/redo, and lasso selection. Notebook pages also offer paper templates,
+25%-200% zoom, and local print/PDF for the selected page. One finger writes;
+two fingers move the view. Pen-only mode reserves writing for a stylus.
+Readback, under the three-dot menu, shows the recognized expression and lets
+you correct a misread without changing the ink.
+
+Supported notation is digits, decimal points, `+`, `-`, `×`, `÷`, and a
+terminal `=`. Variables, algebra, parentheses, and powers are not supported.
+If an answer cannot fit beside the ink on an A4 sheet, it appears in
+Readback rather than expanding the page. Existing pre-A4 pages retain their
+original geometry.
 
 ## Run Locally
 
@@ -32,69 +37,47 @@ npm run build
 npm run preview
 ```
 
-`npm test` runs unit tests; `npm run test:e2e` builds and runs browser
-journeys. Install Playwright's Chromium once with
-`npx playwright install chromium` before browser tests or fixture replay.
+`npm test` runs unit tests; `npm run test:e2e` builds and runs browser tests.
+Install Playwright's Chromium once with `npx playwright install chromium`.
 Stop any running Vite/preview process before `npm ci` on Windows:
 the native Rolldown binary may otherwise be locked (`EPERM`).
 
-`prepare:assets` verifies SHA-256 hashes for the two official PP-OCRv6 tiny
-archives, using matching archives placed in `local-assets/` before
-downloading missing copies, and copies the matching pinned
-ONNX Runtime JSEP files from `node_modules`. Model binaries are Git-ignored
-pending third-party notices and the owner redistribution decision; see the
-[asset provenance review](docs/design/10-model-inference.md#asset-provenance-and-release-condition).
-`npm ci` installs the pinned experimental CTC decoder patch into the SDK's
-nested Worker; development and build checks fail if that patch is absent.
-`npm run build` also repeats asset verification before bundling. A network
-connection is required for `npm ci` and for a clean checkout without local
-model archives.
+`prepare:assets` checks the hashes of the two PP-OCRv6 tiny model archives,
+using matching copies in `local-assets/` or downloading them if absent. The
+archives are not committed. A clean checkout therefore needs a network
+connection for installation and model download. The build repeats asset
+verification and checks the pinned decoder patch installed by `npm ci`.
 
 ## Model and Distribution
 
-V1 uses PaddlePaddle's [PP-OCRv6 tiny detector](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det_onnx)
+CalcInk uses PaddlePaddle's [PP-OCRv6 tiny detector](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det_onnx)
 and [recognizer](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec_onnx).
-Their model cards label the artifacts Apache-2.0. The detector uses an
-LCNetV4 backbone and RepLKFPN neck; the recognizer uses LCNetV4, direct
-reshape, and a CTC+NRTR decoder. CalcInk rasterizes ink in an application
-Worker, then the PaddleOCR.js SDK runs detection and recognition in its
-own Worker using ONNX Runtime Web. See the
-[prototype model comparison](prototype/docs/PADDLEOCR-TRIAL.md) and
-[V1 raster contract](docs/design/09-ml-preprocessing.md) for the evidence
-and input path.
+The detector uses LCNetV4 and RepLKFPN; the recognizer uses LCNetV4 and
+CTC+NRTR. Ink rasterization and PaddleOCR.js inference run in Workers using
+ONNX Runtime Web. A patched `ctc-mask-v2` decoder limits output to arithmetic
+characters while retaining the unrestricted read for diagnostics. This
+decoder has not passed a fresh handwriting accuracy benchmark. See the
+[model design](docs/design/10-model-inference.md) and
+[benchmark protocol](docs/RECOGNITION-BENCHMARK.md).
 
-The active `ctc-mask-v1` experiment restricts CTC decoding to arithmetic
-characters while retaining the model's original dictionary and unrestricted
-read for diagnostics. It is not a proven accuracy improvement: a replay of
-one saved private `4=` sample yielded restricted `4`, unrestricted `二4`,
-and no answer. The [inference design](docs/design/10-model-inference.md)
-describes the patch and its risks.
-An empty restricted detection box is not silently dropped to make an
-answer, and manual correction is never labeled as an OCR read.
-
-The [PaddleOCR.js source](https://github.com/PaddlePaddle/PaddleOCR/tree/main/paddleocr-js)
-identifies the SDK as Apache-2.0; [ONNX Runtime Web](https://github.com/microsoft/onnxruntime/blob/v1.26.0/LICENSE)
-is MIT and has [upstream third-party notices](https://github.com/microsoft/onnxruntime/blob/v1.26.0/ThirdPartyNotices.txt).
-These labels and links do not complete the release review: an exact
-third-party notice bundle, any relevant training-data terms, and the
-owner's redistribution decision remain open. Do not publicly host the
-model-containing build until that review is recorded.
+The model cards identify the weights as Apache-2.0, and the
+[PaddleOCR.js](https://github.com/PaddlePaddle/PaddleOCR/tree/main/paddleocr-js)
+and [ONNX Runtime Web](https://github.com/microsoft/onnxruntime/blob/v1.26.0/LICENSE)
+sources publish their license terms. A public model-containing build still
+needs the exact notice bundle and redistribution review documented in the
+[asset provenance checklist](docs/design/10-model-inference.md#asset-provenance-and-release-condition).
 
 ## Recognition Diagnostics
 
-After a line's automatic read settles, open Readback and choose
-**Export sample**. Enter the expression actually written and confirm the
-local JSON download. The file contains that line's ink, first restricted
-read, and unrestricted diagnostic read, even if you later correct it; no
-sample is uploaded or added to notebook storage. Keep private handwriting
-exports outside Git.
+Open **More options → Readback → Export sample** to download a diagnostic
+JSON file containing the ink and model reads. Nothing is uploaded. Keep
+exports private: they contain handwriting and browser details. For a
+recorded benchmark, confirm the export reports
+`model.decoder: "ctc-mask-v2"`; an older service worker may otherwise serve a
+prior build.
 
-An older service worker may still serve the previous build until its
-update is accepted and the page reloads. Before recording new attempts,
-check that an export reports `model.decoder: "ctc-mask-v1"`.
-
-To replay an exported sample through the production Worker, run
-`npm run build`, then start a local preview with:
+To replay an export through the production Worker, build the app and start
+a preview:
 
 ```powershell
 npm run preview -- --host 127.0.0.1 --port 4173 --strictPort
@@ -102,49 +85,32 @@ npm run preview -- --host 127.0.0.1 --port 4173 --strictPort
 
 In another terminal, run
 `npm run replay:fixture -- "C:\path\to\calcink-sample.json"`.
-The command reports the raw read, notation-normalized read, model timing,
-and exact-read result. Replaying the same ink is a diagnostic, not a new
-handwriting attempt.
+Replay is a diagnostic, not a new handwriting attempt.
 
 ## Verification Status
 
-Desktop browser tests cover ink, corrections, page isolation, storage
-recovery, an offline reload, and **fresh real Worker inference after the
-network is disabled**. The synthetic OCR fixture verifies execution, not
-handwriting accuracy. A synthetic-ink offline equation/edit/correction/page
-journey also passes. Additional tests cover a future-version IndexedDB
-record, failed first service-worker registration and retry, local-only
-production requests, and simulated mobile DPR/touch cancellation. The
-frozen owner-handwriting benchmark, physical-phone 60 FPS, memory, latency
-and offline checks, final public-checkout and hosted-CI paths, and the
-owner redistribution decision are **not yet passed**.
-The experimental CTC mask has not passed a fresh handwriting comparison or
-release gate.
-An isolated clone of the tree now at `b3ab086` installed from scratch,
-downloaded and hash-verified both official model archives, then passed
-the build, 193 app tests, 20 Node tests, and 17 browser tests; see the
-[release evidence snapshot](docs/design/18-release-and-bug-bash.md#evidence-snapshot-4-october-2026).
-Do not treat this working build as a public-release acceptance result.
-Clearing browser site data also removes local pages and offline assets.
+The local V2 build passed 166 Vitest, 21 Node, and 41 Playwright tests on
+7 October 2026. These automated checks include offline OCR, storage
+recovery, both workspaces, input gestures, and print layout. They do not
+establish handwriting accuracy or phone frame pacing. A fresh owner
+handwriting benchmark, physical-phone Performance trace, real print preview,
+hosted CI run, and asset-rights review remain open. See
+[phone acceptance](docs/PHONE-ACCEPTANCE.md) and the
+[V2 release plan](docs/V2-IMPLEMENTATION.md).
+
+Pages and offline assets live in browser storage. Clearing site data deletes
+them.
 
 ## Project Documents
 
-`src/` is the V1 app, `prototype/` is the preserved earlier build, `docs/`
-holds the design and problem statement, and ignored `local-assets/` holds
-optional model archives. `node_modules/`, `dist/`, `.npm-cache/`, and
-`test-results/` are generated, not source.
-The supplied problem-statement PDF is kept locally in `docs/` but excluded
-from Git pending redistribution review.
+The [V2 product design](docs/V2-DESIGN.md) and
+[implementation plan](docs/V2-IMPLEMENTATION.md) describe the current
+scope and open gates. [Architecture](docs/ARCHITECTURE.md),
+[recognition benchmark](docs/RECOGNITION-BENCHMARK.md), and
+[development bug log](docs/BUG-LOG.md) record the technical decisions and
+evidence. Earlier V1 contracts remain in [docs/DESIGN.md](docs/DESIGN.md)
+and [docs/design/](docs/design/01-runtime-foundation.md).
 
-- [Product design](docs/DESIGN.md): scope, user journey, requirements, and acceptance boundaries.
-- [Architecture](docs/ARCHITECTURE.md): local components, data flow, and safety invariants.
-- [Implementation phases](docs/IMPLEMENTATION.md): solo build order, dates, dependencies, and gates.
-- [Recognition benchmark](docs/RECOGNITION-BENCHMARK.md): fresh development and acceptance handwriting protocol.
-- [Phone acceptance](docs/PHONE-ACCEPTANCE.md): physical-device steps and evidence to record.
-- [Solo workflow](docs/WORKFLOW.md): review, verification, Git, and honest reporting rules.
-- [Subsystem deep dives](docs/design/01-runtime-foundation.md): numbered build contracts.
-- [Development bug log](docs/BUG-LOG.md): defects found and regression checks, not a post-release bounty.
-
-The `prototype/evidence/` exports contain handwriting strokes and are kept
-local pending consent review. Do not publish them or the model weights
-without the documented rights review.
+CalcInk is maintained by Pastime_Labs as a solo project with AI-assisted
+development. Product decisions and release verification remain the owner's
+responsibility.

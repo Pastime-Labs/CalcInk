@@ -1,7 +1,7 @@
 # CalcInk V1: Phased Implementation Plan
 
 Status: **Core Phase 1-4 paths implemented locally; phase exit gates remain open**, updated
-4 October 2026. The project leader is
+5 October 2026. The project leader is
 the only human contributor and owns product choices, review, acceptance,
 and submission. AI assistance can write, test, research, and challenge
 implementation; it is not independent human peer review. The
@@ -54,6 +54,7 @@ failed earlier gate into a pass.
 | 2. Ink and arithmetic | 3-4 Oct | Build the shell, page repository/migration core, page controls, pointer ink/tools, vector rendering/history, and safe numeric parser. | Draw/edit/undo on two pages, save and reload them safely; parser checks cover the PS arithmetic grammar and invalid reads. |
 | 3. Paddle recognition and answers | 4-5 Oct | Integrate bounded stroke-to-raster preprocessing, local PP-OCRv6 tiny detection/recognition, line grouping, revision checks, Readback, correction, and adjacent answers. | Real model end-to-end examples, no stale answer after edits, explicit invalid-read state, and measured phone timing. |
 | 4. Durability and offline | By 5 Oct | Harden the existing versioned repository, save/recovery behavior, and correction durability; complete the local Paddle/WASM cache and update states. | Every acknowledged edit survives reload; full equation/edit/page flow works after an offline reload. |
+| 5A. Frontend redesign | 5-6 Oct | Adapt the approved local Figma Make visual reference to a React/Tailwind shell in the root Vite app without replacing the ink, OCR, parser, storage, or PWA contracts. | Leader approves phone/desktop comparison; existing flows, accessibility, offline use, and drawing performance still pass. |
 | 5. Hardening and acceptance | 6 Oct | Check touch, keyboard, accessible announcements, active-recognition 60 FPS, memory, fresh handwriting acceptance, and finish model redistribution review. | No known release blocker; measurements, failures, rights decision, and limitations recorded. |
 | 6. Submission | 7 Oct | Host the static app, publish source/attribution only where permitted, and verify a clean reviewer path. | Public URL and repo work from a fresh browser/checkout; README states model source, license, architecture, and honest status. |
 | 7. Post-release bug bash | After phase 6 | Invite scoped testing, triage, fix, add regression checks, and retest. | Each claimed fix has a genuine report and verified outcome. |
@@ -202,12 +203,43 @@ production build offline on a real device and complete a new equation,
 ink edit, correction, and page switch. "Saved" and "Ready offline" are
 claims backed by committed storage and completed cache installation.
 
+### Phase 5A: Frontend redesign
+
+**Primary deep dive:** [16 Visual design pass](design/16-visual-design-pass.md).
+Use the leader-approved local Figma Make export at
+`Frontend_design_current/src/App.tsx` and
+`Frontend_design_current/src/index.css` as the exact visual reference.
+It is an untracked design artifact, not production logic or a second app.
+Freeze representative phone/desktop reference screenshots and record any
+approved deviations before changing the root UI.
+
+Add React and Tailwind to the **existing** root Vite/TypeScript build, not
+the Figma export's separate project. Replace the presentation shell in
+small browser-verifiable slices. React mounts the structural shell once;
+the existing NotebookApp controller remains the single owner of state and
+updates stable shell elements. Preserve the tested Canvas, parser, Worker,
+IndexedDB, and PWA behavior and data. Move the Readback entry into
+the three-dot menu while keeping its full correction/export flow and
+keyboard/focus behavior. Do not import the export's mock `localStorage`
+pages, hardcoded answers/statuses, colored-ink controls, or other V2
+features. Bundle fonts and icons locally; no runtime Google Fonts, CDN, or
+network dependency is allowed.
+
+At each slice, compare the target at phone and desktop widths and rerun
+relevant interaction checks. The exit gate is leader-approved visual
+fidelity plus passing build, browser, offline, accessibility, and
+active-OCR drawing-performance checks. Also upgrade an installed V1 to the
+redesigned PWA while a save is pending, then reload offline and verify ink,
+pages, and corrections survive. If the new shell breaks a core contract or
+misses the release gate, revert that slice and keep the verified functional
+UI rather than shipping a visually faithful mock.
+
 ### Phase 5: Hardening and acceptance
 
 **Primary deep dives:** [15 Accessibility and real devices](design/15-accessibility-and-devices.md),
-[16 Visual design pass](design/16-visual-design-pass.md), and
 [17 Quality, performance, and evidence](design/17-quality-and-performance.md).
-**Completes:** [08 Recognition evidence](design/08-recognition-evidence.md)
+**Completes:** Phase 5A regression evidence,
+[08 Recognition evidence](design/08-recognition-evidence.md)
 fresh acceptance and the rights investigation started in Phase 0.
 
 Check keyboard and screen-reader paths, touch/stylus behavior, safe areas,
