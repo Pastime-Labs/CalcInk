@@ -1,4 +1,5 @@
 import type { Page, Stroke } from "../canvas/types";
+import { validInkColor, validStrokeStyle } from "../canvas/brush";
 
 export type SavedPage = {
   page: Page;
@@ -47,6 +48,8 @@ function validStrokes(value: unknown): value is Stroke[] {
       ids.has(stroke.id) ||
       !finite(stroke.width) ||
       stroke.width <= 0 ||
+      (stroke.color !== undefined && !validInkColor(stroke.color)) ||
+      (stroke.style !== undefined && !validStrokeStyle(stroke.style)) ||
       !Array.isArray(stroke.points) ||
       stroke.points.length === 0 ||
       stroke.points.length > MAX_POINTS_PER_STROKE
@@ -85,7 +88,18 @@ export function validateSavedPage(value: unknown, key: IDBValidKey): SavedPage {
   };
   if (!object(value) || !object(value.page)) return bad("invalid page wrapper");
   const page = value.page;
-  if (page.schemaVersion !== 2) return bad("unsupported page schema");
+  if (page.schemaVersion !== 2 && page.schemaVersion !== 3) {
+    return bad("unsupported page schema");
+  }
+  if (page.schemaVersion === 3 &&
+      (page.geometry !== "a4" && page.geometry !== "legacy" ||
+       page.template !== "blank" && page.template !== "ruled" &&
+       page.template !== "grid" && page.template !== "dots")) {
+    return bad("invalid page geometry or template");
+  }
+  if (page.schemaVersion === 2 && (page.geometry !== undefined || page.template !== undefined)) {
+    return bad("invalid legacy page metadata");
+  }
   if (!text(page.id, 128) || page.id !== key) return bad("invalid page ID");
   if (!text(page.title, 80)) return bad("invalid title");
   if (
