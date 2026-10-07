@@ -384,6 +384,55 @@ describe("EquationController", () => {
     controller.destroy();
   });
 
+  it("invalidates automatic and corrected answers when lasso moves ink within a line", async () => {
+    vi.useFakeTimers();
+    const worker = new FakeWorker();
+    const corrections = vi.fn();
+    const controller = new EquationController(
+      () => {},
+      corrections,
+      () => worker as unknown as Worker,
+    );
+    controller.setPage(page("A", [stroke("left", 10), stroke("right", 35)]), {});
+    const originalSignature = controller.lines[0]!.line.signature;
+    const lineId = controller.lines[0]!.line.lineId;
+    worker.emit({ type: "ready", requestId: 1, modelId: "test", elapsedMs: 1 });
+    await vi.runOnlyPendingTimersAsync();
+    const request = worker.sent.find((item) => item.type === "recognize");
+    if (!request || request.type !== "recognize") throw new Error("Read was not sent");
+    worker.emit({
+      type: "result",
+      requestId: request.requestId,
+      pageId: request.pageId,
+      lineId: request.lineId,
+      canvasRevisionId: request.canvasRevisionId,
+      rawText: "1+1=",
+      boxes: [{ text: "1+1=", score: 0.9 }],
+      detMs: 1,
+      recMs: 1,
+      elapsedMs: 2,
+      raster: { width: 20, height: 20, version: "test" },
+    });
+    expect(controller.lines[0]?.result).toMatchObject({ kind: "value", display: "2" });
+    expect(controller.hasFirstRead(lineId)).toBe(true);
+
+    controller.inkChanged(page("A", [stroke("left", 10), stroke("right", 45)]));
+    expect(controller.lines[0]?.line.signature).toBe(originalSignature);
+    expect(controller.lines[0]?.phase).toBe("queued");
+    expect(controller.lines[0]?.result).toBeNull();
+    expect(controller.hasFirstRead(lineId)).toBe(false);
+
+    const guard = controller.guardFor(lineId)!;
+    expect(controller.applyCorrection(guard, "1+2=")).toBeNull();
+    expect(controller.lines[0]?.result).toMatchObject({ kind: "value", display: "3" });
+    controller.inkChanged(page("A", [stroke("left", 10), stroke("right", 55)]));
+    expect(controller.lines[0]?.phase).toBe("queued");
+    expect(controller.lines[0]?.result).toBeNull();
+    expect(controller.corrections).toEqual({});
+    expect(corrections).toHaveBeenLastCalledWith({});
+    controller.destroy();
+  });
+
   it("drops stale replies and keeps a correction over a cancelled read", async () => {
     vi.useFakeTimers();
     const worker = new FakeWorker();

@@ -213,7 +213,15 @@ export class EquationController {
     this.clearTimer();
     this.revision += 1;
     const next = groupEquationLines(page.strokes);
-    const validSignatures = new Set(next.map((line) => line.signature));
+    const changedSignatures = new Set(next
+      .filter((line) => {
+        const old = previous.get(line.signature);
+        return old && JSON.stringify(old.line.strokes) !== JSON.stringify(line.strokes);
+      })
+      .map((line) => line.signature));
+    const validSignatures = new Set(next
+      .map((line) => line.signature)
+      .filter((signature) => !changedSignatures.has(signature)));
     for (const signature of this.firstReads.keys()) {
       if (!validSignatures.has(signature)) this.firstReads.delete(signature);
     }
@@ -228,14 +236,15 @@ export class EquationController {
       }
     }
     this.lineViews = next.map((line) => {
-      const old = previous.get(line.signature);
+      const old = changedSignatures.has(line.signature) ? undefined : previous.get(line.signature);
       if (old?.phase === "complete" || old?.phase === "incomplete" || old?.phase === "unreadable") {
         return { ...old, line };
       }
       return corrected(line, this.correctionMap[line.signature] ?? "") ?? queued(line);
     });
     if (correctionsChanged) this.onCorrectionsChanged(this.corrections);
-    const changed = this.lineViews.find((view) => !previous.has(view.line.signature));
+    const changed = this.lineViews.find((view) =>
+      !previous.has(view.line.signature) || changedSignatures.has(view.line.signature));
     this.preferredSignature = changed?.line.signature ?? null;
     this.schedule(changed && hasTerminalEqualsHint(changed.line) ? 80 : 750);
     this.onChange();
