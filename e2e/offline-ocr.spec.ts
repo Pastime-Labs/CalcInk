@@ -278,7 +278,7 @@ test("offline ink, correction, edit, page switch, and reload persist (not OCR ac
     [[265, 179], [295, 179]],
   ];
   for (const path of equation) await drawPath(page, path);
-  await page.getByRole("button", { name: "Readback" }).click();
+  await page.getByRole("button", { name: "Readback", exact: true }).click();
   await expect(page.locator(".line-choice")).toHaveCount(1);
   await expect(page.locator(".line-choice small")).toHaveText(
     /^(Review read|Finish with =|Needs review)$/,
@@ -299,7 +299,7 @@ test("offline ink, correction, edit, page switch, and reload persist (not OCR ac
   await page.getByRole("button", { name: /Pages/ }).click();
   await page.getByRole("button", { name: "New page" }).click();
   await drawPath(page, [[110, 150], [145, 180]]);
-  await page.getByRole("button", { name: "Readback" }).click();
+  await page.getByRole("button", { name: "Readback", exact: true }).click();
   await expect(page.locator(".line-choice")).toHaveCount(1);
   await page.locator("#correction-input").fill("2+3=");
   await page.getByRole("button", { name: "Use correction" }).click();
@@ -312,7 +312,7 @@ test("offline ink, correction, edit, page switch, and reload persist (not OCR ac
   await expect(page.locator("#line-result")).toContainText("23");
   await page.reload();
   await expect(page.locator("#offline-status")).toContainText("Offline; app assets installed");
-  await page.getByRole("button", { name: "Readback" }).click();
+  await page.getByRole("button", { name: "Readback", exact: true }).click();
   await expect(page.locator("#line-result")).toContainText("23");
   await page.getByRole("button", { name: /Pages/ }).click();
   await page.locator('.page-row[data-active="false"] .page-switch').click();
@@ -333,7 +333,7 @@ test("opt-in sample export preserves the first automatic read after correction",
   await page.goto("/");
   await expect(page.locator("#recognition-status")).toHaveText("Recognition ready", { timeout: 90_000 });
   await drawPath(page, [[120, 140], [156, 168]]);
-  await page.getByRole("button", { name: "Readback" }).click();
+  await page.getByRole("button", { name: "Readback", exact: true }).click();
   await expect(page.locator("#export-sample")).toBeVisible({ timeout: 60_000 });
 
   page.on("dialog", async (dialog) => {
