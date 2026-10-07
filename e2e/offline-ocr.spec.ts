@@ -298,8 +298,11 @@ test("offline ink, correction, edit, page switch, and reload persist (not OCR ac
 
   await page.getByRole("button", { name: /Pages/ }).click();
   await page.getByRole("button", { name: "New page" }).click();
+  await expect(page.locator("#drawing-surface")).toHaveCSS("pointer-events", "auto");
   await drawPath(page, [[110, 150], [145, 180]]);
-  await page.getByRole("button", { name: "Readback", exact: true }).click();
+  if (!await page.locator("#readback-panel").isVisible()) {
+    await page.getByRole("button", { name: "Readback", exact: true }).click();
+  }
   await expect(page.locator(".line-choice")).toHaveCount(1);
   await page.locator("#correction-input").fill("2+3=");
   await page.getByRole("button", { name: "Use correction" }).click();
